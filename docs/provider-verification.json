@@ -1,0 +1,143 @@
+{
+ "verified_at": "2026-10-31T16:53:58+00:00",
+ "python": "3.12.14",
+ "farms": {
+  "south_ejisu": {
+   "lat": 6.6974,
+   "lon": -1.4542,
+   "name": "Southern Ghana (Ejisu, Ashanti)"
+  },
+  "north_bolgatanga": {
+   "lat": 10.8185,
+   "lon": -0.924,
+   "name": "Northern Ghana (Bolgatanga, Upper East)"
+  }
+ },
+ "seed_files": {
+  "places": true,
+  "roads": true,
+  "water": true,
+  "adm2": true,
+  "chirps_climatology": true,
+  "soilgrids_vrt": 33
+ },
+ "results": [
+  {
+   "provider": "soilgrids",
+   "status": "ok",
+   "latency_ms": 327,
+   "detail": {
+    "licence": "CC BY 4.0",
+    "access": "WebDAV/VRT",
+    "samples": {
+     "south_ejisu": {
+      "ph_0_5cm": 5.7,
+      "valid_fraction": 0.3333,
+      "pixels": 6,
+      "resolution_m": 250.0
+     },
+     "north_bolgatanga": {
+      "ph_0_5cm": 6.22,
+      "valid_fraction": 1.0,
+      "pixels": 9,
+      "resolution_m": 250.0
+     }
+    }
+   }
+  },
+  {
+   "provider": "openmeteo_forecast",
+   "status": "ok",
+   "latency_ms": 232,
+   "detail": {
+    "status": 200,
+    "grid": [
+     6.7135324,
+     -1.4381714
+    ],
+    "days": 21,
+    "first": "2026-10-26",
+    "licence": "CC BY 4.0 (hosted free tier non-commercial)"
+   }
+  },
+  {
+   "provider": "chirps",
+   "status": "ok",
+   "latency_ms": 759,
+   "detail": {
+    "status": 200,
+    "latest_daily": "rainfall_chirps_daily/2026/09/chirps-v2.0_2026.09.30.tif",
+    "daily_files_in_month": 60,
+    "monthly_head": 200,
+    "licence": "Public domain (UCSB CHC); mirror CC BY 4.0"
+   }
+  },
+  {
+   "provider": "sentinel2",
+   "status": "ok",
+   "latency_ms": 593,
+   "detail": {
+    "status": 200,
+    "items": 3,
+    "latest": "S2A_30NXN_20261029_0_L2A",
+    "cloud_cover": 39.540949,
+    "licence": "Copernicus Sentinel data, free and open"
+   }
+  },
+  {
+   "provider": "copernicus_dem",
+   "status": "ok",
+   "latency_ms": 1385,
+   "detail": {
+    "tile": "Copernicus_DSM_COG_10_N06_00_W002_00_DEM.tif",
+    "resolution_deg": 0.0002777777777777778,
+    "mean_elevation_m": 264.5,
+    "licence": "\u00a9 DLR/Airbus DS, Copernicus DEM"
+   }
+  },
+  {
+   "provider": "esa_worldcover",
+   "status": "ok",
+   "latency_ms": 627,
+   "detail": {
+    "tile": "ESA_WorldCover_10m_2021_v200_N06W003_Map.tif",
+    "dominant_class": 80,
+    "dominant_share": 1.0,
+    "check": "Lake Bosumtwi should be class 80 (permanent water)",
+    "licence": "CC BY 4.0 (ESA WorldCover)"
+   }
+  },
+  {
+   "provider": "geoboundaries",
+   "status": "ok",
+   "latency_ms": 481,
+   "detail": {
+    "status": 200,
+    "units": "260",
+    "licence": "Creative Commons Attribution 4.0 International (CC BY 4.0)"
+   }
+  },
+  {
+   "provider": "wapor",
+   "status": "unavailable",
+   "latency_ms": 228,
+   "error": "RuntimeError: WaPOR catalogue returned HTTP 502"
+  },
+  {
+   "provider": "gaez",
+   "status": "ok",
+   "latency_ms": 813,
+   "detail": {
+    "status": 200,
+    "note": "Interactive download workflow; no documented polygon machine API",
+    "licence": "CC BY-NC-SA 3.0 IGO"
+   }
+  }
+ ],
+ "summary": {
+  "ok": 8,
+  "unavailable": [
+   "wapor"
+  ]
+ }
+}

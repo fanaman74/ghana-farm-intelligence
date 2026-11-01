@@ -1,0 +1,265 @@
+{
+ "dataset": "ISRIC SoilGrids 2.0 VRT metadata (absolute /vsicurl sources)",
+ "provider": "ISRIC \u2014 World Soil Information",
+ "source": "https://files.isric.org/soilgrids/latest/data/",
+ "documentation": "https://docs.isric.org/globaldata/soilgrids/index.html",
+ "licence": "CC BY 4.0",
+ "attribution": "SoilGrids 2.0 (ISRIC \u2014 World Soil Information), CC BY 4.0",
+ "generated_at": "2026-10-31T15:52:36+00:00",
+ "layers": [
+  {
+   "layer": "bdod_0-5cm_mean.vrt",
+   "source_bytes": 3511543,
+   "bytes": 105342,
+   "seconds": 2.4,
+   "skipped": false
+  },
+  {
+   "layer": "bdod_15-30cm_mean.vrt",
+   "source_bytes": 3526905,
+   "bytes": 105187,
+   "seconds": 2.2,
+   "skipped": false
+  },
+  {
+   "layer": "bdod_5-15cm_mean.vrt",
+   "source_bytes": 3519224,
+   "bytes": 104979,
+   "seconds": 2.3,
+   "skipped": false
+  },
+  {
+   "layer": "cec_0-5cm_mean.vrt",
+   "source_bytes": 5915517,
+   "bytes": 157684,
+   "seconds": 3.7,
+   "skipped": false
+  },
+  {
+   "layer": "cec_15-30cm_mean.vrt",
+   "source_bytes": 5941457,
+   "bytes": 157642,
+   "seconds": 3.7,
+   "skipped": false
+  },
+  {
+   "layer": "cec_5-15cm_mean.vrt",
+   "source_bytes": 5928487,
+   "bytes": 158084,
+   "seconds": 3.8,
+   "skipped": false
+  },
+  {
+   "layer": "cfvo_0-5cm_mean.vrt",
+   "source_bytes": 5927837,
+   "bytes": 158227,
+   "seconds": 3.8,
+   "skipped": false
+  },
+  {
+   "layer": "cfvo_15-30cm_mean.vrt",
+   "source_bytes": 5952051,
+   "bytes": 157350,
+   "seconds": 3.9,
+   "skipped": false
+  },
+  {
+   "layer": "cfvo_5-15cm_mean.vrt",
+   "source_bytes": 5939086,
+   "bytes": 156555,
+   "seconds": 3.9,
+   "skipped": false
+  },
+  {
+   "layer": "clay_0-5cm_mean.vrt",
+   "source_bytes": 5929079,
+   "bytes": 157774,
+   "seconds": 4.0,
+   "skipped": false
+  },
+  {
+   "layer": "clay_15-30cm_mean.vrt",
+   "source_bytes": 5954882,
+   "bytes": 157670,
+   "seconds": 3.8,
+   "skipped": false
+  },
+  {
+   "layer": "clay_5-15cm_mean.vrt",
+   "source_bytes": 5941912,
+   "bytes": 156874,
+   "seconds": 3.6,
+   "skipped": false
+  },
+  {
+   "layer": "nitrogen_0-5cm_mean.vrt",
+   "source_bytes": 5978280,
+   "bytes": 164020,
+   "seconds": 3.5,
+   "skipped": false
+  },
+  {
+   "layer": "nitrogen_15-30cm_mean.vrt",
+   "source_bytes": 6004108,
+   "bytes": 164221,
+   "seconds": 3.8,
+   "skipped": false
+  },
+  {
+   "layer": "nitrogen_5-15cm_mean.vrt",
+   "source_bytes": 5991143,
+   "bytes": 164062,
+   "seconds": 3.9,
+   "skipped": false
+  },
+  {
+   "layer": "phh2o_0-5cm_Q0.05.vrt",
+   "source_bytes": 3531831,
+   "bytes": 106606,
+   "seconds": 2.5,
+   "skipped": false
+  },
+  {
+   "layer": "phh2o_0-5cm_Q0.95.vrt",
+   "source_bytes": 3531831,
+   "bytes": 106608,
+   "seconds": 2.3,
+   "skipped": false
+  },
+  {
+   "layer": "phh2o_0-5cm_mean.vrt",
+   "source_bytes": 3524139,
+   "bytes": 105327,
+   "seconds": 2.8,
+   "skipped": false
+  },
+  {
+   "layer": "phh2o_15-30cm_Q0.05.vrt",
+   "source_bytes": 3547215,
+   "bytes": 108181,
+   "seconds": 2.1,
+   "skipped": false
+  },
+  {
+   "layer": "phh2o_15-30cm_Q0.95.vrt",
+   "source_bytes": 3547215,
+   "bytes": 108183,
+   "seconds": 2.1,
+   "skipped": false
+  },
+  {
+   "layer": "phh2o_15-30cm_mean.vrt",
+   "source_bytes": 3539523,
+   "bytes": 107776,
+   "seconds": 2.5,
+   "skipped": false
+  },
+  {
+   "layer": "phh2o_5-15cm_Q0.05.vrt",
+   "source_bytes": 3539523,
+   "bytes": 107711,
+   "seconds": 2.4,
+   "skipped": false
+  },
+  {
+   "layer": "phh2o_5-15cm_Q0.95.vrt",
+   "source_bytes": 3539523,
+   "bytes": 107713,
+   "seconds": 2.3,
+   "skipped": false
+  },
+  {
+   "layer": "phh2o_5-15cm_mean.vrt",
+   "source_bytes": 3531831,
+   "bytes": 106667,
+   "seconds": 2.6,
+   "skipped": false
+  },
+  {
+   "layer": "sand_0-5cm_mean.vrt",
+   "source_bytes": 5928942,
+   "bytes": 157726,
+   "seconds": 3.7,
+   "skipped": false
+  },
+  {
+   "layer": "sand_15-30cm_mean.vrt",
+   "source_bytes": 5954882,
+   "bytes": 157671,
+   "seconds": 3.7,
+   "skipped": false
+  },
+  {
+   "layer": "sand_5-15cm_mean.vrt",
+   "source_bytes": 5941912,
+   "bytes": 156875,
+   "seconds": 3.6,
+   "skipped": false
+  },
+  {
+   "layer": "silt_0-5cm_mean.vrt",
+   "source_bytes": 5928942,
+   "bytes": 157727,
+   "seconds": 3.4,
+   "skipped": false
+  },
+  {
+   "layer": "silt_15-30cm_mean.vrt",
+   "source_bytes": 5954882,
+   "bytes": 157672,
+   "seconds": 3.5,
+   "skipped": false
+  },
+  {
+   "layer": "silt_5-15cm_mean.vrt",
+   "source_bytes": 5941912,
+   "bytes": 156876,
+   "seconds": 3.6,
+   "skipped": false
+  },
+  {
+   "layer": "soc_0-5cm_mean.vrt",
+   "source_bytes": 5907288,
+   "bytes": 157419,
+   "seconds": 4.1,
+   "skipped": false
+  },
+  {
+   "layer": "soc_15-30cm_mean.vrt",
+   "source_bytes": 5933045,
+   "bytes": 157311,
+   "seconds": 4.0,
+   "skipped": false
+  },
+  {
+   "layer": "soc_5-15cm_mean.vrt",
+   "source_bytes": 5920094,
+   "bytes": 157767,
+   "seconds": 3.6,
+   "skipped": false
+  }
+ ],
+ "total_bytes": 4607487,
+ "grid": {
+  "crs": "EPSG:4326",
+  "approx_resolution_m": 250,
+  "native_tile_px": 600
+ },
+ "scale_factors": {
+  "phh2o": 10.0,
+  "soc": 10.0,
+  "nitrogen": 10.0,
+  "clay": 10.0,
+  "sand": 10.0,
+  "silt": 10.0,
+  "cec": 10.0,
+  "bdod": 100.0,
+  "cfvo": 10.0
+ },
+ "example_source": "https://files.isric.org/soilgrids/latest/data/phh2o/phh2o_0-5cm_mean.vrt",
+ "notes": [
+  "Only VRT mosaic indexes are bundled; no SoilGrids raster values are redistributed.",
+  "Runtime reads fetch individual 600\u00d7600 tiles from ISRIC with GDAL range requests.",
+  "WCS GetCoverage was tested and rejected: subsets contained periodic zero artefacts."
+ ]
+}

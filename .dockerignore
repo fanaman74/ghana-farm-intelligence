@@ -1,0 +1,40 @@
+# Build context exclusions — keeps the image small and avoids shipping private data.
+
+# Node
+frontend/node_modules
+frontend/dist
+frontend/docs
+frontend/test-results
+frontend/playwright-report
+frontend/.vite
+
+# Python
+**/__pycache__
+**/*.pyc
+.pytest_cache
+.venv
+venv
+
+# Runtime data and caches (never bake farms, chips or caches into the image)
+backend/data/raw
+backend/data/cache
+backend/data/gfi.sqlite3
+backend/data/gfi.sqlite3-shm
+backend/data/gfi.sqlite3-wal
+backend/data/seed/**/*.tmp.tif
+docs/performance.json
+docs/screenshots
+
+# Docs and screenshots are not needed at runtime
+*.md
+docs
+tests
+_scratch
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.vscode
+.idea
+.git
+.gitignore

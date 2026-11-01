@@ -1,0 +1,2061 @@
+{
+  "schema_version": 1,
+  "generated_at": "2026-10-31T15:52:33Z",
+  "currency_note": "No prices or yields are included. Monetary values are not part of this file. This is an indicative agronomic planning reference compiled from published sources; it is not a yield forecast, an input recommendation, or extension advice. Remote-sensing derivatives (polygon area, CHIRPS rainfall, SoilGrids texture/pH, Copernicus slope) are sampled estimates and must never be presented as a guarantee of crop performance.",
+  "agro_ecological_zones": {
+    "forest": {
+      "name": "Forest zone (rain forest and deciduous forest)",
+      "annual_rainfall_mm": [1500, 2200],
+      "description": "Evergreen rain forest in the south-west grading into deciduous forest to the north. Bimodal rainfall with a major season from about March to July and a minor season from about September to November. Published zone means quoted by MoFA/SRID are about 2,200 mm for rain forest and 1,500 mm for deciduous forest; the band here is widened to cover both and inter-annual variation.",
+      "regions": ["Western", "Western North", "Ashanti", "Eastern", "Central (northern part)", "Volta (middle belt)", "Bono (southern part)"],
+      "source_ids": ["ghana_seed_policy_2013", "fao_cropcalendar_gh", "mofa_gh_facts"]
+    },
+    "transition": {
+      "name": "Transition zone",
+      "annual_rainfall_mm": [1000, 1400],
+      "description": "Mixed forest and grassland north of the forest belt. Bimodal but with a weaker minor season; the transition to unimodal rainfall happens near the northern edge. MoFA/SRID quotes about 1,300 mm mean annual rainfall; FAO's Ghana crop calendar uses a 1,000-1,300 mm band for this zone.",
+      "regions": ["Bono", "Bono East (southern part)", "Ashanti (northern part)", "Eastern (northern part)", "Oti (southern part)"],
+      "source_ids": ["ghana_seed_policy_2013", "fao_cropcalendar_gh", "mofa_gh_facts"]
+    },
+    "guinea_savannah": {
+      "name": "Guinea savannah zone",
+      "annual_rainfall_mm": [750, 1200],
+      "description": "Grassland with scattered trees across the middle-north. Unimodal rainfall with a single growing season from about May/June to October/November. MoFA/SRID quotes about 1,100 mm mean annual rainfall; FAO's Ghana crop calendar uses a 750-1,000 mm band, so the wider band here brackets both.",
+      "regions": ["Northern", "Savannah", "Upper East (southern part)", "Bono East (northern part)", "Oti (northern part)"],
+      "source_ids": ["ghana_seed_policy_2013", "fao_cropcalendar_gh", "mofa_gh_facts"]
+    },
+    "sudan_savannah": {
+      "name": "Sudan savannah zone",
+      "annual_rainfall_mm": [600, 1100],
+      "description": "The driest and northernmost zone, with short grass, sparse trees and a single short growing season (roughly June to October). MoFA/SRID quotes about 1,000 mm mean annual rainfall, but the northern fringe is markedly drier, so the range is deliberately widened downward. Drought, heat and striga pressure are highest here.",
+      "regions": ["Upper East", "Upper West", "Savannah (northern part)"],
+      "source_ids": ["ghana_seed_policy_2013", "fao_cropcalendar_gh", "mofa_gh_facts"]
+    },
+    "coastal_savannah": {
+      "name": "Coastal savannah zone",
+      "annual_rainfall_mm": [700, 1200],
+      "description": "Grassland, shrub and thicket on the coastal plains (Coast-Winneba plains, Accra plains, Ho-Keta plains). Bimodal but with a pronounced dry season and the lowest and most erratic rainfall in southern Ghana; MoFA/SRID quotes about 800 mm mean annual rainfall. Sandy, low-fertility soils are common and irrigation is often needed for vegetables.",
+      "regions": ["Greater Accra", "Central (coastal strip)", "Volta (southern part)", "Eastern (south-eastern plains)"],
+      "source_ids": ["ghana_seed_policy_2013", "fao_cropcalendar_gh", "mofa_gh_facts"]
+    }
+  },
+  "sources": {
+    "fao_ecocrop": {
+      "title": "Ecocrop database - crop environmental requirements and data sheets",
+      "publisher": "Food and Agriculture Organization of the United Nations (FAO), Land and Water Division",
+      "url": "https://ecocrop.apps.fao.org/ecocrop/srv/en/home",
+      "accessed": "2026-10-31",
+      "licence": "FAO content. Factual environmental ranges extracted and paraphrased with attribution for non-commercial planning use; check FAO terms of use before redistribution.",
+      "notes": "Source of per-crop temperature, annual rainfall, soil pH, salinity, fertility and crop-cycle ranges. Data sheets were read at https://ecocrop.apps.fao.org/ecocrop/srv/en/dataSheet?id=NNNN; the exact id used for each crop is listed in GHANA_CROPS_SOURCES.md. EcoCrop gives annual (whole-year) rainfall and broad absolute ranges, so seasonal_rainfall_mm in this file is a narrower, Ghana-season estimate and is not an EcoCrop value."
+    },
+    "fao56": {
+      "title": "Crop evapotranspiration - Guidelines for computing crop water requirements (FAO Irrigation and Drainage Paper 56)",
+      "publisher": "FAO (Allen, Pereira, Raes and Smith), Rome, 1998",
+      "url": "https://www.fao.org/3/x0490e/x0490e00.htm",
+      "accessed": "2026-10-31",
+      "licence": "FAO 1998, all rights reserved. Cited and paraphrased; no table reproduced verbatim.",
+      "notes": "Table 11 (lengths of crop development stages) informed growth-stage lengths and cycle durations, e.g. maize 125 d for humid West Africa, groundnut 130 d for dry West Africa, cowpea 110 d, sorghum 130 d, millet 105 d, rice 150-180 d, onion 150 d, eggplant 130 d. FAO-56 stage lengths are illustrative regional averages and are explicitly not variety-specific."
+    },
+    "fao_cropcalendar_gh": {
+      "title": "FAO Crop Calendar - Ghana country crop calendar",
+      "publisher": "FAO",
+      "url": "https://cropcalendar.apps.fao.org/?isocode=GHA",
+      "accessed": "2026-10-31",
+      "licence": "FAO. Factual calendar data used with attribution for planning purposes.",
+      "notes": "Read via the public JSON service documented in the site's own front-end bundle: https://api-cropcalendar.apps.fao.org/api/v1/countries/GH/cropCalendar?language=en (lastUpdated 26/02/2021, 58 records). Supplied per-zone sowing and harvest windows and growing periods for cassava, rice, yam, groundnut ('Peanut'), cowpea, sorghum, millet ('Mil africain'), soybean, sweet potato, cocoyam and vegetables. Some rows are internally inconsistent (for example onion harvest before sowing, tomato and okra listed as all-year) and were not used."
+    },
+    "fao_giews_ghana": {
+      "title": "GIEWS Country Brief: Ghana",
+      "publisher": "FAO Global Information and Early Warning System",
+      "url": "https://www.fao.org/giews/countrybrief/country.jsp?code=GHA",
+      "accessed": "2026-10-31",
+      "licence": "FAO. Summarised with attribution.",
+      "notes": "Confirms the national season structure: a southern major season roughly March to July, a southern minor season, and unimodal northern sowing between May and July."
+    },
+    "mofa_gh_facts": {
+      "title": "Agriculture in Ghana: Facts and Figures 2019",
+      "publisher": "Ministry of Food and Agriculture (MoFA), Ghana - Statistics, Research and Information Directorate (SRID)",
+      "url": "https://mofa.gov.gh/site/images/pdf/2019%20AGRICULTURE%20FACT%20AND%20FIGURES.pdf",
+      "accessed": "2026-10-31",
+      "licence": "Government of Ghana publication. Read for zone and crop context; no tables reproduced.",
+      "notes": "Consulted for the national agro-ecological zone framing and the crop mix grown in each zone. The ministry site is https://mofa.gov.gh/site/. No production, price or input-rate figures from this document are reproduced in this file."
+    },
+    "ghana_seed_policy_2013": {
+      "title": "National Seed Policy (Republic of Ghana)",
+      "publisher": "Ministry of Food and Agriculture, Ghana (Accra, May 2013); copy hosted on FAOLEX",
+      "url": "https://faolex.fao.org/docs/pdf/gha169581.pdf",
+      "accessed": "2026-10-31",
+      "licence": "Government of Ghana policy document, available via FAOLEX. Cited for factual zone rainfall figures.",
+      "notes": "Section 2.1.3 and Table 1 give mean annual rainfall by agro-ecological zone, attributed in the document to SRID/MoFA and the Meteorological Services Department: rain forest ~2,200 mm, deciduous forest ~1,500 mm, transition ~1,300 mm, coastal savannah ~800 mm, Guinea savannah ~1,100 mm, Sudan savannah ~1,000 mm. Growing-period columns in that table are ambiguous in the PDF text layer and were not used."
+    },
+    "icco_cocoa": {
+      "title": "Growing Cocoa",
+      "publisher": "International Cocoa Organization (ICCO)",
+      "url": "https://www.icco.org/growing-cocoa/",
+      "accessed": "2026-10-31",
+      "licence": "ICCO. Summarised with attribution.",
+      "notes": "Cocoa climate requirements: preferred annual rainfall 1,500-2,000 mm well distributed, dry spells below 100 mm/month should not exceed three months, temperature maxima around 30-32 C and minima 18-21 C, shade indispensable in early years."
+    },
+    "cocobod": {
+      "title": "Ghana Cocoa Board - institutional website",
+      "publisher": "Ghana Cocoa Board (COCOBOD)",
+      "url": "https://cocobod.gh/",
+      "accessed": "2026-10-31",
+      "licence": "COCOBOD. Institutional reference only; no content reproduced.",
+      "notes": "Confirms COCOBOD as the national cocoa regulator and the institutional owner of cocoa extension material. Deliberately not used for numbers: the site currently publishes producer prices, which are excluded from this file."
+    },
+    "gmet": {
+      "title": "Ghana Meteorological Agency - institutional website",
+      "publisher": "Ghana Meteorological Agency (GMet)",
+      "url": "https://meteo.gov.gh/",
+      "accessed": "2026-10-31",
+      "licence": "GMet. Institutional reference only; no content reproduced.",
+      "notes": "Pointer to the national authority for seasonal forecasts and agromet bulletins. No GMet figures or text are reproduced here; all season windows in this file come from the FAO sources listed above. Check GMet's seasonal outlook before finalising planting dates."
+    }
+  },
+  "crops": [
+    {
+      "id": "maize",
+      "name": "Maize",
+      "local_names": {
+        "tw": "aburo",
+        "ee": "bli"
+      },
+      "scientific_name": "Zea mays",
+      "perennial": false,
+      "cycle_days": {
+        "min": 85,
+        "max": 125,
+        "typical": 105
+      },
+      "growth_stages": [
+        {
+          "name": "Land preparation",
+          "start_day": -14,
+          "end_day": 0,
+          "notes": "Clear, plough and harrow; incorporate residues. Timing depends on the first reliable rains."
+        },
+        {
+          "name": "Emergence and vegetative",
+          "start_day": 0,
+          "end_day": 35,
+          "notes": "Sowing to about knee height; early weed control matters most in the first three weeks."
+        },
+        {
+          "name": "Flowering (tasselling and silking)",
+          "start_day": 35,
+          "end_day": 65,
+          "notes": "Critical water demand; drought or heat here cuts grain set directly."
+        },
+        {
+          "name": "Grain filling",
+          "start_day": 65,
+          "end_day": 90,
+          "notes": "Water use stays high; stem borers and fall armyworm damage becomes visible."
+        },
+        {
+          "name": "Maturity and harvest window",
+          "start_day": 90,
+          "end_day": 120,
+          "notes": "Husks dry and black layer forms; harvest promptly to limit field drying losses and aflatoxin risk."
+        }
+      ],
+      "water": {
+        "seasonal_rainfall_mm": [500, 800],
+        "drought_tolerance": "low",
+        "critical_stages": ["flowering", "grain filling"],
+        "irrigation_note": "Rainfed in most of Ghana. A short dry spell at flowering is the single most damaging event; supplementary irrigation at tasselling and grain filling gives the largest return where water is available."
+      },
+      "soil": {
+        "ph": [5.2, 7.5],
+        "ph_optimal": [5.8, 6.8],
+        "texture_preferred": ["sandy loam", "loam", "clay loam"],
+        "drainage": "well",
+        "salinity_tolerance": "low",
+        "fertility_note": "Responds strongly to nitrogen and to organic matter. Poor, sandy coastal soils and continuously cropped savannah soils are commonly nitrogen-limited; no fertilizer rates are given in this file."
+      },
+      "temperature_c": {
+        "mean_min": 16,
+        "mean_max": 34,
+        "optimal": [21, 30],
+        "heat_risk_note": "Day temperatures above about 35 C around flowering reduce pollen viability; night temperatures above about 25 C increase respiration losses."
+      },
+      "slope_max_percent": 15,
+      "seasons": {
+        "south_bimodal": {
+          "major": {
+            "planting_window": [[3, 1], [4, 30]],
+            "harvest_window": [[7, 1], [8, 31]]
+          },
+          "minor": {
+            "planting_window": [[8, 15], [9, 30]],
+            "harvest_window": [[11, 15], [12, 31]]
+          }
+        },
+        "north_unimodal": {
+          "single": {
+            "planting_window": [[5, 15], [7, 10]],
+            "harvest_window": [[9, 15], [11, 30]]
+          }
+        }
+      },
+      "seasons_note": "The south follows a major (March-July) and minor (September-November) season; the north is unimodal with sowing tied to the May-July rains. Field maize has no row in FAO's Ghana crop calendar, so these windows come from the FAO GIEWS season description plus the sweet-corn rows in the same calendar; treat the exact dates as indicative.",
+      "agro_ecological_suitability": {
+        "forest": "Widely grown in both seasons, usually intercropped with cassava or plantain.",
+        "transition": "Widely grown; the main cereal alongside cassava and yam.",
+        "guinea_savannah": "Widely grown and the dominant staple cereal of the north.",
+        "sudan_savannah": "Grown, but short-season varieties are needed and drought plus striga risk is high.",
+        "coastal_savannah": "Grown, often on sandy soils with cassava; yields are constrained by erratic rainfall."
+      },
+      "common_stresses": ["fall armyworm", "stem borers", "striga (savannah)", "drought at flowering", "low soil nitrogen", "maize streak virus"],
+      "management_notes": {
+        "low": "Local seed, no purchased inputs, rainfed, single weeding. Expect high variability between seasons.",
+        "medium": "Improved open-pollinated or hybrid seed, timely sowing, two weedings, some mineral fertilizer where affordable.",
+        "high": "Hybrid seed matched to season length, precise sowing date, split nitrogen, pest scouting, and supplementary irrigation at flowering where possible."
+      },
+      "limitations": "Indicative ranges only. This does not distinguish early, medium and late maturity varieties, does not account for soil water-holding capacity or nitrogen status, and says nothing about expected yield or profit. Local variety and a soil test take precedence.",
+      "evidence_quality": "verified_source",
+      "source_ids": ["fao_ecocrop", "fao56", "fao_cropcalendar_gh", "fao_giews_ghana", "mofa_gh_facts", "gmet"]
+    },
+    {
+      "id": "cassava",
+      "name": "Cassava",
+      "local_names": {
+        "tw": "bankye",
+        "ee": "agbeli"
+      },
+      "scientific_name": "Manihot esculenta",
+      "perennial": false,
+      "cycle_days": {
+        "min": 270,
+        "max": 365,
+        "typical": 300
+      },
+      "growth_stages": [
+        {
+          "name": "Land preparation and planting material",
+          "start_day": -21,
+          "end_day": 0,
+          "notes": "Select healthy stem cuttings from mature plants; plant on ridges or flat depending on drainage."
+        },
+        {
+          "name": "Establishment",
+          "start_day": 0,
+          "end_day": 45,
+          "notes": "Sprouting and rooting; the crop is most vulnerable to waterlogging and weed competition now."
+        },
+        {
+          "name": "Canopy development",
+          "start_day": 45,
+          "end_day": 150,
+          "notes": "Rapid leaf and stem growth; canopy closure suppresses weeds."
+        },
+        {
+          "name": "Root bulking",
+          "start_day": 150,
+          "end_day": 270,
+          "notes": "Starch accumulation in the storage roots; drought here reduces root size rather than killing the plant."
+        },
+        {
+          "name": "Maturity and harvest window",
+          "start_day": 270,
+          "end_day": 365,
+          "notes": "Roots can be held in the ground and harvested progressively, which spreads labour and market risk."
+        }
+      ],
+      "water": {
+        "seasonal_rainfall_mm": [700, 1500],
+        "drought_tolerance": "high",
+        "critical_stages": ["establishment (first 8-10 weeks)", "root bulking"],
+        "irrigation_note": "Usually rainfed and tolerant of dry spells once established, but it yields poorly on shallow or waterlogged soils. It is not a dryland crop: prolonged drought in the first two months causes gaps that are never recovered."
+      },
+      "soil": {
+        "ph": [4.5, 8.0],
+        "ph_optimal": [5.5, 6.8],
+        "texture_preferred": ["sandy loam", "loam", "sandy clay loam"],
+        "drainage": "well",
+        "salinity_tolerance": "low",
+        "fertility_note": "Produces something even on very poor soils but responds to potassium and to organic matter. Waterlogging causes root rot, so drainage matters more than fertility on coastal and valley-bottom soils."
+      },
+      "temperature_c": {
+        "mean_min": 18,
+        "mean_max": 34,
+        "optimal": [22, 30],
+        "heat_risk_note": "Very hot, dry air increases leaf drop and reduces root bulking; cassava has no hard chilling limit in Ghana."
+      },
+      "slope_max_percent": 20,
+      "seasons": {
+        "south_bimodal": {
+          "major": {
+            "planting_window": [[4, 1], [6, 30]],
+            "harvest_window": [[1, 1], [4, 30]]
+          },
+          "minor": {
+            "planting_window": [[8, 15], [10, 15]],
+            "harvest_window": [[5, 1], [8, 31]]
+          }
+        },
+        "north_unimodal": {
+          "single": {
+            "planting_window": [[6, 1], [8, 31]],
+            "harvest_window": [[2, 1], [5, 31]]
+          }
+        }
+      },
+      "seasons_note": "Harvest windows fall in the calendar year after planting because the crop occupies 9-12 months. FAO's Ghana calendar gives planting between April and August with harvest from November to January for early-maturing fields; the windows here allow for the longer cycles common in farm practice.",
+      "agro_ecological_suitability": {
+        "forest": "The core cassava belt; long cycles and high fresh-root output are possible.",
+        "transition": "Very widely grown; a food-security and cash crop for both seasons.",
+        "guinea_savannah": "Widely grown; needs good planting rains and deep soils.",
+        "sudan_savannah": "Grown but marginal without supplementary water; short, drought-escaping varieties are used.",
+        "coastal_savannah": "Widely grown on sandy soils, often the most reliable staple where rainfall is erratic."
+      },
+      "common_stresses": ["cassava mosaic disease", "cassava green mite", "cassava mealybug", "root rot in poorly drained soils", "prolonged dry spells after planting", "weed competition in the first two months"],
+      "management_notes": {
+        "low": "Local varieties, own cuttings, no inputs, no weeding after establishment.",
+        "medium": "Clean planting material, ridge or mound preparation, two weedings, some fertilizer on exhausted soils.",
+        "high": "Improved mosaic-resistant varieties, certified disease-free cuttings, planned spacing, integrated weed and mealybug management, staggered planting for continuous harvest."
+      },
+      "limitations": "Indicative ranges only. Cycle length varies enormously with variety and harvest intention (fresh eating versus processing), and reported rainfall ranges in EcoCrop are annual rather than seasonal. This file says nothing about yield, starch content, or market timing.",
+      "evidence_quality": "verified_source",
+      "source_ids": ["fao_ecocrop", "fao_cropcalendar_gh", "fao_giews_ghana", "mofa_gh_facts"]
+    },
+    {
+      "id": "rice_upland",
+      "name": "Upland rice",
+      "local_names": {},
+      "scientific_name": "Oryza sativa (upland ecotype)",
+      "perennial": false,
+      "cycle_days": {
+        "min": 100,
+        "max": 140,
+        "typical": 120
+      },
+      "growth_stages": [
+        {
+          "name": "Land preparation",
+          "start_day": -14,
+          "end_day": 0,
+          "notes": "Ploughing and harrowing on well-drained upland soils; good surface drainage is essential."
+        },
+        {
+          "name": "Germination and early tillering",
+          "start_day": 0,
+          "end_day": 30,
+          "notes": "Direct dry sowing into moist soil; the crop competes poorly with weeds at this stage."
+        },
+        {
+          "name": "Tillering and panicle initiation",
+          "start_day": 30,
+          "end_day": 65,
+          "notes": "Nitrogen demand peaks; drought here reduces the number of productive tillers."
+        },
+        {
+          "name": "Flowering and grain filling",
+          "start_day": 65,
+          "end_day": 95,
+          "notes": "Most sensitive to water deficit and to high temperature at anthesis."
+        },
+        {
+          "name": "Maturity and harvest",
+          "start_day": 95,
+          "end_day": 130,
+          "notes": "Harvest when 80-85 percent of grains are straw-coloured; bird damage can be severe."
+        }
+      ],
+      "water": {
+        "seasonal_rainfall_mm": [600, 1000],
+        "drought_tolerance": "moderate",
+        "critical_stages": ["panicle initiation", "flowering", "grain filling"],
+        "irrigation_note": "Grown on rainfed uplands with no standing water. It needs well-distributed rainfall rather than high totals, and it fails in waterlogged or flooded fields where lowland rice would be planted instead."
+      },
+      "soil": {
+        "ph": [5.0, 7.0],
+        "ph_optimal": [5.5, 6.5],
+        "texture_preferred": ["sandy loam", "loam"],
+        "drainage": "well",
+        "salinity_tolerance": "low",
+        "fertility_note": "Requires free drainage; iron toxicity and waterlogging problems of paddy soils do not apply, but poor upland soils are commonly nitrogen- and phosphorus-limited."
+      },
+      "temperature_c": {
+        "mean_min": 18,
+        "mean_max": 33,
+        "optimal": [22, 30],
+        "heat_risk_note": "Temperatures above about 35 C at flowering cause spikelet sterility; upland rice is more exposed to this than paddy rice."
+      },
+      "slope_max_percent": 12,
+      "seasons": {
+        "south_bimodal": {
+          "major": {
+            "planting_window": [[3, 15], [5, 15]],
+            "harvest_window": [[7, 15], [9, 15]]
+          },
+          "minor": {
+            "planting_window": [[8, 1], [9, 15]],
+            "harvest_window": [[11, 1], [12, 20]]
+          }
+        },
+        "north_unimodal": {
+          "single": {
+            "planting_window": [[5, 20], [7, 15]],
+            "harvest_window": [[9, 20], [11, 30]]
+          }
+        }
+      },
+      "seasons_note": "Sowing must follow the establishment of reliable rains because upland rice has no standing water buffer. The windows are narrower than for maize for that reason.",
+      "agro_ecological_suitability": {
+        "forest": "Grown on well-drained upland soils; secondary to cassava and maize.",
+        "transition": "Grown, but the transition to drier savannah makes rainfall reliability the limiting factor.",
+        "guinea_savannah": "The main upland rice area in Ghana; rainfall amount and distribution drive the outcome.",
+        "sudan_savannah": "Rare and risky without supplementary water.",
+        "coastal_savannah": "Limited; sandy soils dry out too quickly for reliable upland rice."
+      },
+      "common_stresses": ["weeds (especially in the first month)", "drought at panicle initiation", "rice yellow mottle virus", "stem borers", "granivorous birds", "poor soil nitrogen"],
+      "management_notes": {
+        "low": "Broadcast local seed, no fertilizer, one weeding. Productivity is usually low and variable.",
+        "medium": "Line sowing or drilling, two weedings, some nitrogen where affordable.",
+        "high": "Improved upland varieties, timely sowing on the first reliable rains, row planting, split nitrogen, bird scaring and timely harvest."
+      },
+      "limitations": "Indicative ranges only. Upland and lowland rice are agronomically different systems; this entry must not be used to score paddy fields. Variety duration ranges from about 100 to 140 days and is not distinguished here.",
+      "evidence_quality": "verified_source",
+      "source_ids": ["fao_ecocrop", "fao56", "fao_cropcalendar_gh", "fao_giews_ghana"]
+    },
+    {
+      "id": "rice_lowland",
+      "name": "Lowland (paddy) rice",
+      "local_names": {},
+      "scientific_name": "Oryza sativa (lowland/paddy ecotype)",
+      "perennial": false,
+      "cycle_days": {
+        "min": 110,
+        "max": 150,
+        "typical": 130
+      },
+      "growth_stages": [
+        {
+          "name": "Nursery and land preparation",
+          "start_day": -25,
+          "end_day": 0,
+          "notes": "Raise seedlings in a nursery and prepare and puddle the field; bund construction and levelling determine water control."
+        },
+        {
+          "name": "Transplanting and establishment",
+          "start_day": 0,
+          "end_day": 25,
+          "notes": "Transplant 2-3 seedlings per hill into standing water or saturated soil."
+        },
+        {
+          "name": "Tillering",
+          "start_day": 25,
+          "end_day": 55,
+          "notes": "Keep the field saturated; weed competition and water stress both cut tiller number."
+        },
+        {
+          "name": "Panicle initiation to flowering",
+          "start_day": 55,
+          "end_day": 85,
+          "notes": "The critical period for water; do not let the field dry out."
+        },
+        {
+          "name": "Grain filling",
+          "start_day": 85,
+          "end_day": 110,
+          "notes": "Water can be reduced gradually towards the end of this stage."
+        },
+        {
+          "name": "Maturity and harvest",
+          "start_day": 110,
+          "end_day": 140,
+          "notes": "Drain the field before harvest; thresh and dry promptly to avoid losses."
+        }
+      ],
+      "water": {
+        "seasonal_rainfall_mm": [900, 1500],
+        "drought_tolerance": "low",
+        "critical_stages": ["transplanting", "panicle initiation", "flowering"],
+        "irrigation_note": "Needs standing water or a saturated root zone for most of the season. Rainfed lowland fields depend on valley-bottom water and bunding; supplementary irrigation at panicle initiation is the highest-value intervention where it is available."
+      },
+      "soil": {
+        "ph": [5.0, 7.0],
+        "ph_optimal": [5.5, 6.5],
+        "texture_preferred": ["clay loam", "clay", "silt loam"],
+        "drainage": "poor",
+        "salinity_tolerance": "low",
+        "fertility_note": "A slowly permeable subsoil that holds water is an advantage here. Prolonged flooding can induce iron toxicity on strongly acidic soils, and phosphorus availability is often low."
+      },
+      "temperature_c": {
+        "mean_min": 18,
+        "mean_max": 34,
+        "optimal": [22, 31],
+        "heat_risk_note": "Night temperatures above about 27 C increase respiration losses; cool nights during grain filling favour higher filled-grain weight."
+      },
+      "slope_max_percent": 2,
+      "seasons": {
+        "south_bimodal": {
+          "major": {
+            "planting_window": [[3, 1], [5, 31]],
+            "harvest_window": [[7, 20], [10, 15]]
+          },
+          "minor": {
+            "planting_window": [[8, 1], [9, 30]],
+            "harvest_window": [[11, 15], [12, 31]]
+          }
+        },
+        "north_unimodal": {
+          "single": {
+            "planting_window": [[6, 1], [7, 31]],
+            "harvest_window": [[10, 15], [12, 31]]
+          }
+        }
+      },
+      "seasons_note": "Lowland rice is tied to water availability, not just rainfall: nursery timing in the north is set by the arrival of the June-July rains and by the water level in the valley bottom. FAO's Ghana calendar gives rainfed rice sowing in June-July with harvest October-December in the savannah zones. The minor-season harvest commonly runs into January; it is cut at 31 December here so the window does not wrap the calendar year.",
+      "agro_ecological_suitability": {
+        "forest": "Grown in inland valleys and stream bottoms; small but important area.",
+        "transition": "Valley-bottom rice is significant; bunding and water control are decisive.",
+        "guinea_savannah": "The main rainfed lowland rice area, concentrated in valley bottoms.",
+        "sudan_savannah": "Possible only in valley bottoms with reliable water; risk is high.",
+        "coastal_savannah": "Limited by salinity and water control in coastal floodplains."
+      },
+      "common_stresses": ["water shortage at panicle initiation", "iron toxicity on acidic flooded soils", "rice yellow mottle virus", "stem borers", "weeds in transplanted fields", "salinity in coastal floodplains"],
+      "management_notes": {
+        "low": "Broadcast or random transplanting, no bunding, no fertilizer, one weeding.",
+        "medium": "Bunded field, line transplanting of healthy seedlings, two weedings, some nitrogen.",
+        "high": "Levelled and bunded field with controlled water depth, improved varieties, split nitrogen, integrated pest management, timely drainage before harvest."
+      },
+      "limitations": "Indicative ranges only. Actual water need depends on field water balance, seepage and bunding quality, which this file cannot see. Do not use this entry for upland fields, and do not read seasonal_rainfall_mm as an irrigation requirement.",
+      "evidence_quality": "verified_source",
+      "source_ids": ["fao_ecocrop", "fao56", "fao_cropcalendar_gh", "mofa_gh_facts", "gmet"]
+    },
+    {
+      "id": "yam",
+      "name": "Yam (white yam)",
+      "local_names": {
+        "tw": "bayere",
+        "ee": "te"
+      },
+      "scientific_name": "Dioscorea rotundata",
+      "perennial": false,
+      "cycle_days": {
+        "min": 210,
+        "max": 300,
+        "typical": 270
+      },
+      "growth_stages": [
+        {
+          "name": "Seed yam selection and mound preparation",
+          "start_day": -45,
+          "end_day": 0,
+          "notes": "Select sound seed yams; mound or ridge early so soils are ready at planting."
+        },
+        {
+          "name": "Sprouting and vine establishment",
+          "start_day": 0,
+          "end_day": 60,
+          "notes": "Sprouting depends on soil moisture; staking at this stage improves later light capture."
+        },
+        {
+          "name": "Vine growth",
+          "start_day": 60,
+          "end_day": 140,
+          "notes": "Rapid staking and leaf development; weed control is critical because yam is a weak competitor."
+        },
+        {
+          "name": "Tuber bulking",
+          "start_day": 140,
+          "end_day": 240,
+          "notes": "The yield-forming stage; water stress and nematode damage both reduce tuber size."
+        },
+        {
+          "name": "Senescence and harvest window",
+          "start_day": 240,
+          "end_day": 300,
+          "notes": "Vines die back; harvest carefully to avoid breaking tubers, which drives storage losses."
+        }
+      ],
+      "water": {
+        "seasonal_rainfall_mm": [900, 1500],
+        "drought_tolerance": "moderate",
+        "critical_stages": ["sprouting", "tuber bulking"],
+        "irrigation_note": "Rainfed. Planting is timed to the onset of rains so that sprouting and early vine growth coincide with reliable moisture; dry spells during bulking reduce tuber size rather than killing the crop."
+      },
+      "soil": {
+        "ph": [5.3, 7.8],
+        "ph_optimal": [5.8, 6.8],
+        "texture_preferred": ["sandy loam", "loam", "sandy clay loam"],
+        "drainage": "well",
+        "salinity_tolerance": "low",
+        "fertility_note": "Deep, friable, well-drained soils give the best tuber shape. Fertility is built mainly through organic matter and rotation; waterlogging and heavy clay cause misshapen tubers and rots."
+      },
+      "temperature_c": {
+        "mean_min": 20,
+        "mean_max": 34,
+        "optimal": [25, 30],
+        "heat_risk_note": "Yam is a warm-season crop; cool conditions slow sprouting, and very high soil temperatures on bare mounds increase tuber damage."
+      },
+      "slope_max_percent": 15,
+      "seasons": {
+        "south_bimodal": {
+          "major": {
+            "planting_window": [[1, 15], [4, 15]],
+            "harvest_window": [[8, 1], [12, 31]]
+          },
+          "minor": null
+        },
+        "north_unimodal": {
+          "single": {
+            "planting_window": [[1, 1], [3, 31]],
+            "harvest_window": [[8, 1], [12, 31]]
+          }
+        }
+      },
+      "seasons_note": "Yam is effectively a single-season crop even in southern Ghana because the cycle takes 7-10 months; the minor-season field is therefore null rather than an invented second window. Planting in the north starts in December-March so that vines use the full unimodal rainy season. In the north, planting can start in December on residual moisture and runs to the end of March; the January-March span shown is the part that does not wrap the calendar year.",
+      "agro_ecological_suitability": {
+        "forest": "Grown, but cassava and plantain dominate; yam is important in the forest-savannah fringe.",
+        "transition": "A major yam belt, especially around Techiman and Kintampo.",
+        "guinea_savannah": "The main white yam producing zone in Ghana.",
+        "sudan_savannah": "Marginal; short rainy season limits tuber bulking.",
+        "coastal_savannah": "Grown in small areas on sandy soils; poor water retention is a constraint."
+      },
+      "common_stresses": ["yam mosaic virus", "anthracnose (on some species)", "nematodes", "tuber rot in wet soils", "termites", "weed competition", "high cost and scarcity of seed yam"],
+      "management_notes": {
+        "low": "Small mounds, unselected seed yam, no staking, one weeding.",
+        "medium": "Selected seed yam, staking, two weedings, organic matter applied to mounds.",
+        "high": "Certified seed yam, early and uniform mounding, staking, planned rotation, nematode management, careful harvest and curing for storage."
+      },
+      "limitations": "Indicative ranges only. This entry describes white yam (Dioscorea rotundata); water yam, yellow yam and trifoliate yam differ in cycle and disease reaction. Seed-yam quality and cost, not climate, often decide whether the crop is planted at all.",
+      "evidence_quality": "verified_source",
+      "source_ids": ["fao_ecocrop", "fao_cropcalendar_gh", "mofa_gh_facts"]
+    },
+    {
+      "id": "plantain",
+      "name": "Plantain",
+      "local_names": {
+        "tw": "boro"
+      },
+      "scientific_name": "Musa acuminata x balbisiana (AAB plantain group)",
+      "perennial": true,
+      "cycle_days": {
+        "min": 270,
+        "max": 365,
+        "typical": 330
+      },
+      "growth_stages": [
+        {
+          "name": "Land preparation and sucker selection",
+          "start_day": -30,
+          "end_day": 0,
+          "notes": "Days are counted from planting of the sucker. Use clean sword suckers or tissue-culture plants."
+        },
+        {
+          "name": "Establishment",
+          "start_day": 0,
+          "end_day": 60,
+          "notes": "Rooting and first leaves; the plant is vulnerable to waterlogging and weevil attack."
+        },
+        {
+          "name": "Vegetative growth and suckering",
+          "start_day": 60,
+          "end_day": 180,
+          "notes": "Pseudostem and leaf area build up; manage one follower per mat for the next cycle."
+        },
+        {
+          "name": "Shooting (bunch emergence)",
+          "start_day": 180,
+          "end_day": 240,
+          "notes": "Bunch emerges; water demand is at its peak and wind damage becomes a risk."
+        },
+        {
+          "name": "Bunch development and first harvest",
+          "start_day": 240,
+          "end_day": 330,
+          "notes": "First harvest at about 9-12 months after planting; ratoon cycles afterwards are typically shorter, around 8-10 months."
+        }
+      ],
+      "water": {
+        "seasonal_rainfall_mm": [1200, 2200],
+        "drought_tolerance": "low",
+        "critical_stages": ["bunch emergence", "bunch filling"],
+        "irrigation_note": "Needs a well-distributed water supply throughout the year and is among the least drought-tolerant staples in Ghana. A dry season without irrigation delays shooting and reduces bunch size; mulching helps but does not replace water."
+      },
+      "soil": {
+        "ph": [5.0, 7.0],
+        "ph_optimal": [5.8, 6.5],
+        "texture_preferred": ["loam", "sandy loam", "clay loam"],
+        "drainage": "well",
+        "salinity_tolerance": "low",
+        "fertility_note": "Heavy feeder with a large potassium demand for bunch filling. Deep, well-drained, organic-matter-rich soils are best; waterlogging causes root and corm rot."
+      },
+      "temperature_c": {
+        "mean_min": 18,
+        "mean_max": 33,
+        "optimal": [24, 30],
+        "heat_risk_note": "Growth slows below about 20 C; very high temperatures with dry air cause leaf scorch and premature bunch emergence."
+      },
+      "slope_max_percent": 15,
+      "seasons": null,
+      "seasons_note": "Perennial: planting can be done at the onset of the rains in either the major or minor season, and harvesting continues year-round once the first bunch is cut. There is no single planting-to-harvest season, so seasons is null rather than a fabricated window. Days in growth_stages are days since planting of the sucker; establishment and immature phases are distinguished from mature ratoon production.",
+      "agro_ecological_suitability": {
+        "forest": "The main plantain zone; the humid south-west is best suited.",
+        "transition": "Widely grown and important for food security, though dry spells bite.",
+        "guinea_savannah": "Grown near homesteads and in moist spots; irrigation or mulch is needed.",
+        "sudan_savannah": "Not recommended without reliable irrigation.",
+        "coastal_savannah": "Grown in backyard and market gardens; dry season irrigation is essential."
+      },
+      "common_stresses": ["black sigatoka", "banana weevil", "nematodes", "wind damage", "dry-season water shortage", "bunchy top-like virus symptoms"],
+      "management_notes": {
+        "low": "Unselected suckers, no desuckering, no mulch, no inputs.",
+        "medium": "Clean suckers, one follower managed per mat, mulching, two weedings.",
+        "high": "Tissue-culture or certified clean suckers, planned mat management, mulching and irrigation, de-leafing for sigatoka, propping bunches against wind."
+      },
+      "limitations": "Indicative ranges only. Plantain is a perennial mat system, and this entry compresses it into establishment and first-cycle phases; ratoon productivity, bunch weight and marketable size are not covered. This is not a yield forecast.",
+      "evidence_quality": "secondary_reference",
+      "source_ids": ["fao_ecocrop", "mofa_gh_facts"]
+    },
+    {
+      "id": "cocoa",
+      "name": "Cocoa",
+      "local_names": {
+        "tw": "kookoo"
+      },
+      "scientific_name": "Theobroma cacao",
+      "perennial": true,
+      "cycle_days": {
+        "min": 1095,
+        "max": 1460,
+        "typical": 1278
+      },
+      "growth_stages": [
+        {
+          "name": "Nursery",
+          "start_day": 0,
+          "end_day": 120,
+          "notes": "Days counted from sowing. Shade is indispensable; seedlings are ready for the field at about 4-6 months."
+        },
+        {
+          "name": "Field establishment",
+          "start_day": 120,
+          "end_day": 365,
+          "notes": "Transplant under established shade; the first year decides whether the farm closes canopy."
+        },
+        {
+          "name": "Immature (jorquette and canopy)",
+          "start_day": 365,
+          "end_day": 1095,
+          "notes": "Vegetative growth and canopy formation; formative pruning and shade control are the main tasks."
+        },
+        {
+          "name": "First bearing and first harvest",
+          "start_day": 1095,
+          "end_day": 1460,
+          "notes": "First commercial harvest at about 3-4 years after planting. The mature phase then continues for roughly 25-30 years, with two harvest peaks per year; that phase is not modelled here."
+        }
+      ],
+      "water": {
+        "seasonal_rainfall_mm": [1300, 2000],
+        "drought_tolerance": "low",
+        "critical_stages": ["flowering and pod set", "pod development"],
+        "irrigation_note": "Rainfed. ICCO guidance is for 1,500-2,000 mm well distributed, with dry spells below 100 mm per month not exceeding about three months. Cocoa is very sensitive to soil water deficit, and a dry season during pod development causes cherelle wilt and pod loss."
+      },
+      "soil": {
+        "ph": [4.5, 7.0],
+        "ph_optimal": [5.5, 6.5],
+        "texture_preferred": ["loam", "sandy clay loam", "clay loam"],
+        "drainage": "well",
+        "salinity_tolerance": "low",
+        "fertility_note": "Deep, well-drained forest soils with good organic matter. Cocoa tolerates acidity but not waterlogging or a hardpan; shade and leaf litter cycling supply much of the nutrient need."
+      },
+      "temperature_c": {
+        "mean_min": 18,
+        "mean_max": 32,
+        "optimal": [21, 29],
+        "heat_risk_note": "ICCO gives annual mean maxima of about 30-32 C and minima of 18-21 C. Hot, dry air combined with exposed canopy increases leaf scorch and flower abortion."
+      },
+      "slope_max_percent": 15,
+      "seasons": null,
+      "seasons_note": "Perennial tree crop with a 25-30 year productive life. Main crop harvest in Ghana is roughly October to March with a light mid-crop around May to August, but these are harvest peaks rather than planting windows, so seasons is null. Days in growth_stages are days from sowing (nursery) and from field planting.",
+      "agro_ecological_suitability": {
+        "forest": "The primary cocoa zone; the majority of national production.",
+        "transition": "Important and expanding cocoa area, though more drought-exposed.",
+        "guinea_savannah": "Not suitable without irrigation and shade; drought stress is severe.",
+        "sudan_savannah": "Not suitable.",
+        "coastal_savannah": "Not suitable; too dry and soils are too sandy."
+      },
+      "common_stresses": ["black pod disease", "cocoa swollen shoot virus", "mirids (capsids)", "dry-season water deficit", "poor shade management", "ageing trees and low replanting"],
+      "management_notes": {
+        "low": "Unshaded or poorly shaded farm, no pruning, no pest management, old trees.",
+        "medium": "Shade management, annual pruning, regular harvesting and pod breaking, some pest control.",
+        "high": "Improved varieties, planned shade, sanitation and pruning, mirid and black pod management, record keeping, phased replanting of old farms."
+      },
+      "limitations": "Indicative ranges only. cycle_days here means time to first commercial harvest, not the life of the farm, and the mature phase is described in notes rather than modelled. Yield, bean quality and farm economics are out of scope.",
+      "evidence_quality": "verified_source",
+      "source_ids": ["fao_ecocrop", "icco_cocoa", "cocobod", "ghana_seed_policy_2013"]
+    },
+    {
+      "id": "groundnut",
+      "name": "Groundnut",
+      "local_names": {
+        "tw": "nkate",
+        "ee": "azigo"
+      },
+      "scientific_name": "Arachis hypogaea",
+      "perennial": false,
+      "cycle_days": {
+        "min": 90,
+        "max": 125,
+        "typical": 105
+      },
+      "growth_stages": [
+        {
+          "name": "Land preparation",
+          "start_day": -14,
+          "end_day": 0,
+          "notes": "Fine, well-drained seedbed; flat planting is common on sandy soils."
+        },
+        {
+          "name": "Emergence and vegetative",
+          "start_day": 0,
+          "end_day": 30,
+          "notes": "Slow early growth; weed control and a free-draining surface matter."
+        },
+        {
+          "name": "Flowering and pegging",
+          "start_day": 30,
+          "end_day": 60,
+          "notes": "Pegs must enter moist soil; compaction or crusting reduces pod set."
+        },
+        {
+          "name": "Pod filling",
+          "start_day": 60,
+          "end_day": 90,
+          "notes": "Water stress and foliar disease here cut kernel filling and increase aflatoxin risk at harvest."
+        },
+        {
+          "name": "Maturity and harvest",
+          "start_day": 90,
+          "end_day": 120,
+          "notes": "Lift when the inner shell shows dark veining; dry quickly to below safe moisture to limit aflatoxin."
+        }
+      ],
+      "water": {
+        "seasonal_rainfall_mm": [450, 750],
+        "drought_tolerance": "moderate",
+        "critical_stages": ["flowering and pegging", "pod filling"],
+        "irrigation_note": "Rainfed, mostly on sandy soils with low water storage. A dry spell at pegging is the main cause of poor pod set; the crop cannot compensate later."
+      },
+      "soil": {
+        "ph": [5.5, 7.0],
+        "ph_optimal": [6.0, 6.5],
+        "texture_preferred": ["loamy sand", "sandy loam"],
+        "drainage": "well",
+        "salinity_tolerance": "low",
+        "fertility_note": "Light, friable soils allow pegging and easy lifting. Groundnut fixes nitrogen but needs calcium at pegging and is sensitive to poor nodulation on exhausted soils."
+      },
+      "temperature_c": {
+        "mean_min": 18,
+        "mean_max": 34,
+        "optimal": [25, 32],
+        "heat_risk_note": "Soil temperatures above about 35 C at pegging reduce peg survival; cool conditions slow germination."
+      },
+      "slope_max_percent": 10,
+      "seasons": {
+        "south_bimodal": {
+          "major": {
+            "planting_window": [[3, 15], [5, 15]],
+            "harvest_window": [[7, 1], [8, 31]]
+          },
+          "minor": {
+            "planting_window": [[8, 15], [9, 30]],
+            "harvest_window": [[11, 1], [12, 31]]
+          }
+        },
+        "north_unimodal": {
+          "single": {
+            "planting_window": [[5, 1], [6, 30]],
+            "harvest_window": [[9, 1], [10, 31]]
+          }
+        }
+      },
+      "seasons_note": "FAO's Ghana calendar gives groundnut sowing in April-May and harvest July-August in the forest zone, May-June to September-October in the Guinea savannah, and July to November-December in the transition zone. The windows here are a smoothed version of those rows.",
+      "agro_ecological_suitability": {
+        "forest": "Grown, but humid conditions increase foliar disease; the savannah is more important.",
+        "transition": "Important groundnut area with both season options.",
+        "guinea_savannah": "The main groundnut belt, especially the Upper East and Northern regions.",
+        "sudan_savannah": "Grown widely; short-season varieties and moisture conservation are essential.",
+        "coastal_savannah": "Grown on sandy soils; drought and low fertility limit yields."
+      },
+      "common_stresses": ["groundnut rosette virus (and its aphid vector)", "early and late leaf spot", "aflatoxin risk at harvest and storage", "termites", "drought at pegging", "poor calcium at pegging"],
+      "management_notes": {
+        "low": "Local seed, broadcast sowing, no inputs, late harvest.",
+        "medium": "Improved seed, row sowing, two weedings, some calcium or gypsum where soils are acid.",
+        "high": "Certified seed of a rosette-resistant variety, timely sowing on the first rains, row spacing, disease scouting, rapid drying and aflatoxin-aware storage."
+      },
+      "limitations": "Indicative ranges only. Aflatoxin risk depends on harvest and drying practice rather than climate, and is not modelled here. No yield figures are given; kernel quality and market grade are out of scope.",
+      "evidence_quality": "verified_source",
+      "source_ids": ["fao_ecocrop", "fao56", "fao_cropcalendar_gh"]
+    },
+    {
+      "id": "cowpea",
+      "name": "Cowpea",
+      "local_names": {
+        "tw": "aduwa",
+        "ee": "ayo"
+      },
+      "scientific_name": "Vigna unguiculata",
+      "perennial": false,
+      "cycle_days": {
+        "min": 60,
+        "max": 90,
+        "typical": 75
+      },
+      "growth_stages": [
+        {
+          "name": "Land preparation",
+          "start_day": -7,
+          "end_day": 0,
+          "notes": "Shallow tillage is enough; cowpea is often planted into standing cereal residues."
+        },
+        {
+          "name": "Emergence and vegetative",
+          "start_day": 0,
+          "end_day": 20,
+          "notes": "Fast early growth; thrips and aphids can attack seedlings within days."
+        },
+        {
+          "name": "Flowering",
+          "start_day": 20,
+          "end_day": 35,
+          "notes": "Flower thrips and drought at flowering cause the heaviest losses."
+        },
+        {
+          "name": "Pod filling",
+          "start_day": 35,
+          "end_day": 55,
+          "notes": "Pod borers and bruchid build-up begin here."
+        },
+        {
+          "name": "Maturity and harvest",
+          "start_day": 55,
+          "end_day": 75,
+          "notes": "Pods mature unevenly; two pickings are common. Dry promptly and store hermetically against bruchids."
+        }
+      ],
+      "water": {
+        "seasonal_rainfall_mm": [350, 650],
+        "drought_tolerance": "high",
+        "critical_stages": ["flowering", "pod filling"],
+        "irrigation_note": "The most drought-tolerant grain legume in this list and a genuine dry-season option on residual moisture. One supplementary irrigation at flowering can stabilise pod set where water is available."
+      },
+      "soil": {
+        "ph": [5.5, 7.5],
+        "ph_optimal": [6.0, 7.0],
+        "texture_preferred": ["loamy sand", "sandy loam", "loam"],
+        "drainage": "well",
+        "salinity_tolerance": "low",
+        "fertility_note": "Grows on poor, sandy soils and fixes nitrogen when properly nodulated. Responds to phosphorus on exhausted soils; excessive nitrogen delays flowering."
+      },
+      "temperature_c": {
+        "mean_min": 18,
+        "mean_max": 36,
+        "optimal": [25, 33],
+        "heat_risk_note": "Tolerates high temperatures better than most legumes, but temperatures above about 36 C at flowering increase flower drop."
+      },
+      "slope_max_percent": 12,
+      "seasons": {
+        "south_bimodal": {
+          "major": {
+            "planting_window": [[3, 15], [4, 30]],
+            "harvest_window": [[6, 1], [7, 31]]
+          },
+          "minor": {
+            "planting_window": [[9, 1], [10, 15]],
+            "harvest_window": [[11, 1], [12, 31]]
+          }
+        },
+        "north_unimodal": {
+          "single": {
+            "planting_window": [[6, 15], [8, 10]],
+            "harvest_window": [[9, 20], [11, 20]]
+          }
+        }
+      },
+      "seasons_note": "Cowpea is flexible: FAO's Ghana calendar shows sowing from April to August in the Guinea savannah and September-October on the coast, with 60-70 day cycles. The windows here follow that pattern.",
+      "agro_ecological_suitability": {
+        "forest": "Grown, but humidity favours foliar disease; less important than in the savannah.",
+        "transition": "Grown as an intercrop and a relay crop after cereals.",
+        "guinea_savannah": "The main cowpea zone; often relay-planted into maize or millet.",
+        "sudan_savannah": "Very important as a drought-tolerant legume and cash crop.",
+        "coastal_savannah": "Grown in the minor season on sandy soils."
+      },
+      "common_stresses": ["flower thrips", "pod borers (Maruca)", "cowpea aphid and mosaic viruses", "bruchids in storage", "striga (savannah)", "drought at flowering"],
+      "management_notes": {
+        "low": "Local seed, broadcast, no inputs, one harvest.",
+        "medium": "Improved seed, row planting, two weedings, timely picking.",
+        "high": "Certified seed, timely sowing, scouting at flowering, hermetic storage, planned rotation with cereals."
+      },
+      "limitations": "Indicative ranges only. Cycle length varies from about 60 days for spreading types to 90 for longer-maturing ones. Storage losses from bruchids are a major determinant of real value and are not modelled here.",
+      "evidence_quality": "verified_source",
+      "source_ids": ["fao_ecocrop", "fao56", "fao_cropcalendar_gh"]
+    },
+    {
+      "id": "sorghum",
+      "name": "Sorghum",
+      "local_names": {},
+      "scientific_name": "Sorghum bicolor",
+      "perennial": false,
+      "cycle_days": {
+        "min": 100,
+        "max": 140,
+        "typical": 115
+      },
+      "growth_stages": [
+        {
+          "name": "Land preparation",
+          "start_day": -14,
+          "end_day": 0,
+          "notes": "Conservation of early moisture matters more than fine tilth in the savannah."
+        },
+        {
+          "name": "Emergence and vegetative",
+          "start_day": 0,
+          "end_day": 35,
+          "notes": "Slow early growth; weed control and striga management begin now."
+        },
+        {
+          "name": "Boot and panicle initiation",
+          "start_day": 35,
+          "end_day": 55,
+          "notes": "The crop sets its yield potential here; drought at this point is costly."
+        },
+        {
+          "name": "Flowering and grain filling",
+          "start_day": 55,
+          "end_day": 95,
+          "notes": "Birds and stem borers become significant; grain filling benefits from late rains."
+        },
+        {
+          "name": "Maturity and harvest",
+          "start_day": 95,
+          "end_day": 130,
+          "notes": "Harvest when grain is hard; heads can be dried and stored on the cob."
+        }
+      ],
+      "water": {
+        "seasonal_rainfall_mm": [400, 700],
+        "drought_tolerance": "high",
+        "critical_stages": ["boot and panicle initiation", "grain filling"],
+        "irrigation_note": "Rainfed and the most reliable cereal option in the driest parts of northern Ghana. It can be planted on the first rains and will tolerate mid-season dry spells that would ruin maize."
+      },
+      "soil": {
+        "ph": [5.2, 7.8],
+        "ph_optimal": [6.0, 7.0],
+        "texture_preferred": ["sandy loam", "loam", "clay loam"],
+        "drainage": "well",
+        "salinity_tolerance": "moderate",
+        "fertility_note": "Tolerates poorer soils than maize but still responds to nitrogen and phosphorus. Sorghum is relatively tolerant of salinity and of moderately waterlogged soils among the cereals."
+      },
+      "temperature_c": {
+        "mean_min": 16,
+        "mean_max": 36,
+        "optimal": [24, 32],
+        "heat_risk_note": "More heat-tolerant than maize; sustained temperatures above about 38 C during flowering can still reduce seed set."
+      },
+      "slope_max_percent": 15,
+      "seasons": {
+        "south_bimodal": {
+          "major": {
+            "planting_window": [[3, 15], [5, 15]],
+            "harvest_window": [[7, 15], [9, 30]]
+          },
+          "minor": {
+            "planting_window": [[8, 15], [9, 30]],
+            "harvest_window": [[11, 15], [12, 31]]
+          }
+        },
+        "north_unimodal": {
+          "single": {
+            "planting_window": [[7, 1], [8, 15]],
+            "harvest_window": [[10, 20], [12, 20]]
+          }
+        }
+      },
+      "seasons_note": "In the north sorghum is often sown later than maize and millet, from July into August, to catch the main rains; FAO's Ghana calendar shows sowing in July in the Guinea savannah and August-September in the transition zone.",
+      "agro_ecological_suitability": {
+        "forest": "Minor crop; humid conditions favour disease and bird damage.",
+        "transition": "Grown as a late-season cereal and for brewing.",
+        "guinea_savannah": "A major cereal, especially for food security and local brewing.",
+        "sudan_savannah": "A key drought-tolerant staple where maize is risky.",
+        "coastal_savannah": "Grown on a small scale on sandy soils."
+      },
+      "common_stresses": ["striga", "stem borers", "quelea birds", "downy mildew", "drought at booting", "soil phosphorus deficiency"],
+      "management_notes": {
+        "low": "Local seed, broadcast, no fertilizer, one weeding.",
+        "medium": "Improved seed, row planting, two weedings, some mineral fertilizer.",
+        "high": "Improved or hybrid seed, timely sowing, row spacing, striga management through rotation, bird scaring, threshing and storage hygiene."
+      },
+      "limitations": "Indicative ranges only. It does not separate guinea, caudatum and durra types, nor brewing versus food types, which differ in quality requirements. No yield or price is implied.",
+      "evidence_quality": "verified_source",
+      "source_ids": ["fao_ecocrop", "fao56", "fao_cropcalendar_gh", "ghana_seed_policy_2013"]
+    },
+    {
+      "id": "millet",
+      "name": "Pearl millet",
+      "local_names": {},
+      "scientific_name": "Pennisetum glaucum",
+      "perennial": false,
+      "cycle_days": {
+        "min": 85,
+        "max": 120,
+        "typical": 100
+      },
+      "growth_stages": [
+        {
+          "name": "Land preparation",
+          "start_day": -10,
+          "end_day": 0,
+          "notes": "Light tillage or planting into residues; moisture conservation is the main aim."
+        },
+        {
+          "name": "Emergence and tillering",
+          "start_day": 0,
+          "end_day": 30,
+          "notes": "Very fast establishment on light soils; thinning to the right plant stand matters."
+        },
+        {
+          "name": "Stem elongation and heading",
+          "start_day": 30,
+          "end_day": 50,
+          "notes": "Head initiation determines head size; drought here reduces it permanently."
+        },
+        {
+          "name": "Flowering and grain filling",
+          "start_day": 50,
+          "end_day": 80,
+          "notes": "Bird damage and head miner attack are most visible now."
+        },
+        {
+          "name": "Maturity and harvest",
+          "start_day": 80,
+          "end_day": 110,
+          "notes": "Heads mature quickly; harvest promptly to limit bird and weather losses."
+        }
+      ],
+      "water": {
+        "seasonal_rainfall_mm": [350, 600],
+        "drought_tolerance": "high",
+        "critical_stages": ["tillering", "grain filling"],
+        "irrigation_note": "The most drought-escaping cereal in this file and the default choice on the driest northern soils. It matures on a short rainy season and will not tolerate waterlogging."
+      },
+      "soil": {
+        "ph": [5.2, 7.8],
+        "ph_optimal": [5.8, 6.8],
+        "texture_preferred": ["loamy sand", "sandy loam"],
+        "drainage": "well",
+        "salinity_tolerance": "low",
+        "fertility_note": "Produces something on very poor sandy soils, which is its main role. Responds to small amounts of nitrogen and phosphorus where rainfall allows."
+      },
+      "temperature_c": {
+        "mean_min": 16,
+        "mean_max": 38,
+        "optimal": [25, 35],
+        "heat_risk_note": "The most heat-tolerant cereal in this list; it can set grain at temperatures that would sterilise maize."
+      },
+      "slope_max_percent": 15,
+      "seasons": {
+        "south_bimodal": {
+          "major": {
+            "planting_window": [[3, 15], [4, 30]],
+            "harvest_window": [[6, 15], [8, 31]]
+          },
+          "minor": {
+            "planting_window": [[8, 1], [9, 15]],
+            "harvest_window": [[10, 15], [12, 15]]
+          }
+        },
+        "north_unimodal": {
+          "single": {
+            "planting_window": [[6, 1], [7, 31]],
+            "harvest_window": [[9, 1], [11, 30]]
+          }
+        }
+      },
+      "seasons_note": "FAO's Ghana calendar gives millet sowing from 1 June to mid-July and harvest from September to end-November in the Guinea savannah, with a 90-120 day growing period. Those dates are used directly.",
+      "agro_ecological_suitability": {
+        "forest": "Rare; too humid and not a traditional food crop there.",
+        "transition": "Grown on the drier northern edge of the zone.",
+        "guinea_savannah": "Important cereal, especially on sandy soils.",
+        "sudan_savannah": "A core staple and the most reliable cereal in the driest districts.",
+        "coastal_savannah": "Minor; grown on sandy soils in dry areas."
+      },
+      "common_stresses": ["downy mildew", "millet head miner", "striga", "quelea birds", "drought at heading", "low soil fertility"],
+      "management_notes": {
+        "low": "Local seed, broadcast, no inputs, no thinning.",
+        "medium": "Improved seed, row planting, thinning, one or two weedings.",
+        "high": "Improved varieties, moisture conservation, timely sowing, thinning to stand, bird scaring, storage hygiene."
+      },
+      "limitations": "Indicative ranges only. Local landraces vary widely in maturity (some mature in about 75 days). The file does not distinguish food from fodder types, and gives no yield expectation.",
+      "evidence_quality": "verified_source",
+      "source_ids": ["fao_ecocrop", "fao56", "fao_cropcalendar_gh"]
+    },
+    {
+      "id": "soybean",
+      "name": "Soybean",
+      "local_names": {},
+      "scientific_name": "Glycine max",
+      "perennial": false,
+      "cycle_days": {
+        "min": 95,
+        "max": 130,
+        "typical": 115
+      },
+      "growth_stages": [
+        {
+          "name": "Land preparation",
+          "start_day": -10,
+          "end_day": 0,
+          "notes": "Well-drained, fine seedbed; avoid land that held soybean recently."
+        },
+        {
+          "name": "Emergence and vegetative",
+          "start_day": 0,
+          "end_day": 30,
+          "notes": "Check nodulation early; poor nodulation usually means poor nitrogen supply later."
+        },
+        {
+          "name": "Flowering",
+          "start_day": 30,
+          "end_day": 50,
+          "notes": "Short days and moisture determine flower number; drought here causes heavy flower abortion."
+        },
+        {
+          "name": "Pod filling",
+          "start_day": 50,
+          "end_day": 85,
+          "notes": "The main yield-forming stage; rust and pod-feeding insects appear now."
+        },
+        {
+          "name": "Maturity and harvest",
+          "start_day": 85,
+          "end_day": 120,
+          "notes": "Harvest when seed rattles in the pod; delay causes pod shattering and quality loss."
+        }
+      ],
+      "water": {
+        "seasonal_rainfall_mm": [500, 800],
+        "drought_tolerance": "moderate",
+        "critical_stages": ["flowering", "pod filling"],
+        "irrigation_note": "Rainfed. Soybean is more sensitive to waterlogging than cowpea and more sensitive to drought at pod filling than groundnut; it needs a well-drained field and reliable late-season moisture."
+      },
+      "soil": {
+        "ph": [5.5, 7.2],
+        "ph_optimal": [6.0, 6.8],
+        "texture_preferred": ["loam", "sandy loam", "clay loam"],
+        "drainage": "well",
+        "salinity_tolerance": "low",
+        "fertility_note": "Needs adequate phosphorus, potassium and sulphur, and inoculation where the right rhizobia are absent. Soybean is a poor fit for very acid or waterlogged soils."
+      },
+      "temperature_c": {
+        "mean_min": 16,
+        "mean_max": 34,
+        "optimal": [22, 30],
+        "heat_risk_note": "Temperatures above about 35 C during flowering increase pod abortion; cool nights during pod filling favour seed quality."
+      },
+      "slope_max_percent": 12,
+      "seasons": {
+        "south_bimodal": {
+          "major": {
+            "planting_window": [[4, 1], [5, 31]],
+            "harvest_window": [[8, 1], [9, 30]]
+          },
+          "minor": {
+            "planting_window": [[7, 15], [8, 31]],
+            "harvest_window": [[10, 20], [12, 10]]
+          }
+        },
+        "north_unimodal": {
+          "single": {
+            "planting_window": [[6, 1], [7, 20]],
+            "harvest_window": [[10, 1], [11, 20]]
+          }
+        }
+      },
+      "seasons_note": "FAO's Ghana calendar gives soybean sowing from April to July across zones with harvest in October-November and a 120-215 day span that appears to include late harvests; the 95-130 day cycle here follows FAO-56 and standard variety durations instead.",
+      "agro_ecological_suitability": {
+        "forest": "Grown, but humidity increases rust and foliar disease pressure.",
+        "transition": "Grown and promoted as a rotation and cash crop.",
+        "guinea_savannah": "The main soybean zone in northern Ghana.",
+        "sudan_savannah": "Grown with short-season varieties; moisture is limiting.",
+        "coastal_savannah": "Grown on a small scale; sandy soils and dry spells limit it."
+      },
+      "common_stresses": ["soybean rust", "bacterial pustule", "pod-sucking bugs", "pod shattering at harvest", "poor nodulation", "drought at pod filling"],
+      "management_notes": {
+        "low": "Local seed, broadcast, no inoculation, no inputs.",
+        "medium": "Improved seed, row planting, inoculation where available, two weedings.",
+        "high": "Certified seed, correct rhizobium inoculant, row spacing, scouting for rust and pod bugs, timely harvest to avoid shattering."
+      },
+      "limitations": "Indicative ranges only. Nodulation and inoculant availability often matter more than climate, and this file does not model them. No yield, oil or protein figures are given.",
+      "evidence_quality": "verified_source",
+      "source_ids": ["fao_ecocrop", "fao56", "fao_cropcalendar_gh"]
+    },
+    {
+      "id": "tomato",
+      "name": "Tomato",
+      "local_names": {},
+      "scientific_name": "Solanum lycopersicum",
+      "perennial": false,
+      "cycle_days": {
+        "min": 90,
+        "max": 130,
+        "typical": 110
+      },
+      "growth_stages": [
+        {
+          "name": "Nursery",
+          "start_day": -28,
+          "end_day": 0,
+          "notes": "Raise seedlings in a shaded, well-drained nursery bed; harden off before transplanting."
+        },
+        {
+          "name": "Transplanting and establishment",
+          "start_day": 0,
+          "end_day": 20,
+          "notes": "Transplant at 3-4 weeks; moisture at transplanting decides the stand."
+        },
+        {
+          "name": "Vegetative and flowering",
+          "start_day": 20,
+          "end_day": 45,
+          "notes": "Staking and pruning begin; water stress now causes flower drop."
+        },
+        {
+          "name": "Fruit set and development",
+          "start_day": 45,
+          "end_day": 75,
+          "notes": "The critical period for irrigation and for fruit borer and blight control."
+        },
+        {
+          "name": "Harvest window",
+          "start_day": 75,
+          "end_day": 110,
+          "notes": "Repeated picking over several weeks; harvest at colour break for distant markets."
+        }
+      ],
+      "water": {
+        "seasonal_rainfall_mm": [400, 700],
+        "drought_tolerance": "low",
+        "critical_stages": ["flowering", "fruit set"],
+        "irrigation_note": "In Ghana tomato is largely a dry-season irrigated crop in the south and a rainfed or supplementary-irrigated crop elsewhere. Consistent moisture is essential; wet-dry cycles cause fruit cracking and blossom-end rot."
+      },
+      "soil": {
+        "ph": [5.5, 7.0],
+        "ph_optimal": [6.0, 6.8],
+        "texture_preferred": ["loam", "sandy loam", "clay loam"],
+        "drainage": "well",
+        "salinity_tolerance": "low",
+        "fertility_note": "Heavy feeder, particularly for potassium during fruiting. Raised beds and organic matter improve drainage and reduce soil-borne disease."
+      },
+      "temperature_c": {
+        "mean_min": 14,
+        "mean_max": 32,
+        "optimal": [20, 27],
+        "heat_risk_note": "Fruit set fails above about 32 C by day or 24 C at night; this is why Ghanaian tomato is often grown in the cooler dry season rather than at the hottest time of year."
+      },
+      "slope_max_percent": 12,
+      "seasons": {
+        "south_bimodal": {
+          "major": {
+            "planting_window": [[4, 15], [6, 15]],
+            "harvest_window": [[7, 15], [9, 30]]
+          },
+          "minor": {
+            "planting_window": [[9, 1], [10, 31]],
+            "harvest_window": [[11, 15], [12, 31]]
+          }
+        },
+        "north_unimodal": {
+          "single": {
+            "planting_window": [[7, 1], [8, 31]],
+            "harvest_window": [[10, 1], [12, 15]]
+          }
+        }
+      },
+      "seasons_note": "FAO's Ghana calendar row for tomato is effectively all-year and internally inconsistent, so it was not used for windows. The windows here reflect the common pattern of a major-season crop and a dry-season irrigated crop in the south, and an irrigated cool-season crop in the north. Minor-season picking usually continues into January and February; the window is cut at 31 December to keep it within one calendar year.",
+      "agro_ecological_suitability": {
+        "forest": "Grown, but high humidity increases blight and bacterial disease pressure.",
+        "transition": "A major commercial tomato area around Techiman and Tuobodom.",
+        "guinea_savannah": "Grown, mostly with irrigation in the dry season.",
+        "sudan_savannah": "Requires irrigation; heat and water scarcity are severe constraints.",
+        "coastal_savannah": "Important dry-season irrigated production near Accra and along the coast."
+      },
+      "common_stresses": ["bacterial wilt", "late blight", "tomato yellow leaf curl virus", "fruit borer", "flower drop at high temperature", "fruit cracking from uneven watering"],
+      "management_notes": {
+        "low": "Local seed, flat beds, rainfed, minimal staking.",
+        "medium": "Improved seed, nursery, staking, two weedings, some fertilizer.",
+        "high": "Grafted or resistant varieties, raised beds with mulch and drip irrigation, staking and pruning, scouting, planned rotation."
+      },
+      "limitations": "Indicative ranges only. Tomato is the most management-sensitive crop in this file; variety, irrigation reliability and disease pressure dominate outcomes far more than the ranges given. No yield, price or pesticide guidance is included.",
+      "evidence_quality": "verified_source",
+      "source_ids": ["fao_ecocrop", "fao_cropcalendar_gh", "mofa_gh_facts"]
+    },
+    {
+      "id": "pepper",
+      "name": "Pepper (chili)",
+      "local_names": {
+        "tw": "mako"
+      },
+      "scientific_name": "Capsicum annuum",
+      "perennial": false,
+      "cycle_days": {
+        "min": 100,
+        "max": 160,
+        "typical": 130
+      },
+      "growth_stages": [
+        {
+          "name": "Nursery",
+          "start_day": -35,
+          "end_day": 0,
+          "notes": "Seedlings are slow; a raised, shaded nursery gives a more uniform stand."
+        },
+        {
+          "name": "Transplanting and establishment",
+          "start_day": 0,
+          "end_day": 25,
+          "notes": "Transplant at about 5-6 weeks; avoid deep planting."
+        },
+        {
+          "name": "Vegetative and flowering",
+          "start_day": 25,
+          "end_day": 60,
+          "notes": "First flowers appear; water stress and thrips now determine the early crop."
+        },
+        {
+          "name": "Fruit set and development",
+          "start_day": 60,
+          "end_day": 90,
+          "notes": "Fruit set is sensitive to heat and to irregular watering."
+        },
+        {
+          "name": "Harvest window",
+          "start_day": 90,
+          "end_day": 140,
+          "notes": "Repeated picking; green fruit for fresh market, red for drying or powder."
+        }
+      ],
+      "water": {
+        "seasonal_rainfall_mm": [450, 800],
+        "drought_tolerance": "moderate",
+        "critical_stages": ["flowering", "fruit set"],
+        "irrigation_note": "Often grown as an irrigated dry-season crop in the south. It tolerates short dry spells better than tomato but drops flowers under stress; even moisture prevents fruit drop and sunscald."
+      },
+      "soil": {
+        "ph": [5.5, 7.0],
+        "ph_optimal": [6.0, 6.8],
+        "texture_preferred": ["loam", "sandy loam"],
+        "drainage": "well",
+        "salinity_tolerance": "low",
+        "fertility_note": "Moderate feeder; excess nitrogen produces leaf at the expense of fruit. Well-drained soils with organic matter reduce root disease."
+      },
+      "temperature_c": {
+        "mean_min": 16,
+        "mean_max": 33,
+        "optimal": [20, 30],
+        "heat_risk_note": "Fruit set is reduced above about 33 C and below about 15 C; pepper handles heat slightly better than tomato."
+      },
+      "slope_max_percent": 15,
+      "seasons": {
+        "south_bimodal": {
+          "major": {
+            "planting_window": [[4, 1], [6, 15]],
+            "harvest_window": [[7, 1], [10, 31]]
+          },
+          "minor": {
+            "planting_window": [[9, 1], [10, 31]],
+            "harvest_window": [[11, 15], [12, 31]]
+          }
+        },
+        "north_unimodal": {
+          "single": {
+            "planting_window": [[6, 15], [8, 15]],
+            "harvest_window": [[10, 1], [12, 31]]
+          }
+        }
+      },
+      "seasons_note": "FAO's Ghana calendar gives pepper sowing in August-November with harvest from late September to January on the coast, but other zone rows are empty, so the windows here are a conservative synthesis of the coastal row and common practice. Pepper is picked repeatedly, so harvest windows often extend past the end date shown (into January-February in the south and into January in the north); they are cut at 31 December to avoid wrapping the calendar year.",
+      "agro_ecological_suitability": {
+        "forest": "Grown, including the important chili areas of the coastal forest fringe.",
+        "transition": "Grown commercially; dry-season irrigation extends the season.",
+        "guinea_savannah": "Grown, largely under irrigation in the dry season.",
+        "sudan_savannah": "Irrigation required; heat and water scarcity limit the crop.",
+        "coastal_savannah": "A traditional pepper area, including the Keta and Accra plains."
+      },
+      "common_stresses": ["pepper veinal mottle virus", "anthracnose", "bacterial spot", "thrips and mite-transmitted viruses", "flower drop in heat", "sunscald"],
+      "management_notes": {
+        "low": "Local seed, flat planting, rainfed, no staking.",
+        "medium": "Improved seed, nursery, row planting, two weedings, some fertilizer.",
+        "high": "Certified seed or seedlings, raised beds, mulch and irrigation, staking, virus-vector management, planned rotation."
+      },
+      "limitations": "Indicative ranges only. The file covers Capsicum annuum chili types and does not distinguish bell or long-fruited types, whose heat and water responses differ. No yield or price is implied.",
+      "evidence_quality": "verified_source",
+      "source_ids": ["fao_ecocrop", "fao56", "fao_cropcalendar_gh"]
+    },
+    {
+      "id": "okra",
+      "name": "Okra",
+      "local_names": {
+        "tw": "nkruma",
+        "ee": "fetri"
+      },
+      "scientific_name": "Abelmoschus esculentus",
+      "perennial": false,
+      "cycle_days": {
+        "min": 70,
+        "max": 110,
+        "typical": 90
+      },
+      "growth_stages": [
+        {
+          "name": "Land preparation",
+          "start_day": -7,
+          "end_day": 0,
+          "notes": "Fine seedbed; okra seed has a hard coat and benefits from soaking or scarifying."
+        },
+        {
+          "name": "Emergence and vegetative",
+          "start_day": 0,
+          "end_day": 30,
+          "notes": "Fast growth in warm soil; thin to the intended stand."
+        },
+        {
+          "name": "Flowering",
+          "start_day": 30,
+          "end_day": 45,
+          "notes": "Flowers open daily; the first pods set about 45-55 days after sowing."
+        },
+        {
+          "name": "Pod development and repeated harvest",
+          "start_day": 45,
+          "end_day": 80,
+          "notes": "Pick every 2-3 days; pods become fibrous if left too long."
+        },
+        {
+          "name": "Late harvest",
+          "start_day": 80,
+          "end_day": 100,
+          "notes": "Plants keep producing until disease, cold or water shortage ends the crop."
+        }
+      ],
+      "water": {
+        "seasonal_rainfall_mm": [400, 700],
+        "drought_tolerance": "moderate",
+        "critical_stages": ["flowering", "pod development"],
+        "irrigation_note": "Tolerates heat well but needs steady moisture for tender pods. In the coastal savannah it is commonly grown with supplementary irrigation in the dry season."
+      },
+      "soil": {
+        "ph": [5.5, 7.2],
+        "ph_optimal": [6.0, 7.0],
+        "texture_preferred": ["loam", "sandy loam", "clay loam"],
+        "drainage": "well",
+        "salinity_tolerance": "low",
+        "fertility_note": "Moderate feeder; too much nitrogen gives lush leaf and few pods. Organic matter improves pod quality on sandy soils."
+      },
+      "temperature_c": {
+        "mean_min": 16,
+        "mean_max": 34,
+        "optimal": [22, 32],
+        "heat_risk_note": "Very heat-tolerant; growth slows below about 18 C and pod quality falls in cool weather."
+      },
+      "slope_max_percent": 15,
+      "seasons": {
+        "south_bimodal": {
+          "major": {
+            "planting_window": [[3, 1], [5, 31]],
+            "harvest_window": [[5, 15], [8, 31]]
+          },
+          "minor": {
+            "planting_window": [[8, 15], [10, 15]],
+            "harvest_window": [[10, 15], [12, 31]]
+          }
+        },
+        "north_unimodal": {
+          "single": {
+            "planting_window": [[6, 1], [7, 31]],
+            "harvest_window": [[8, 15], [11, 30]]
+          }
+        }
+      },
+      "seasons_note": "FAO's Ghana calendar lists okra as an all-year crop with a 70-80 day cycle, which is not a usable window. The windows here follow the two southern rainy seasons and the single northern season, with harvest beginning about seven weeks after sowing. Minor-season picking often continues into January; it is cut at 31 December here to avoid a window that wraps the calendar year.",
+      "agro_ecological_suitability": {
+        "forest": "Grown year-round in home gardens and market plots.",
+        "transition": "Grown, with a long picking period into the dry season.",
+        "guinea_savannah": "Grown in the rainy season and under irrigation near towns.",
+        "sudan_savannah": "Grown with irrigation; the dry season limits rainfed crops.",
+        "coastal_savannah": "Common, including dry-season irrigated production."
+      },
+      "common_stresses": ["okra mosaic virus", "flea beetle", "shoot and fruit borer", "root-knot nematode", "powdery mildew", "drought during podding"],
+      "management_notes": {
+        "low": "Local seed, broadcast or wide spacing, no inputs, irregular picking.",
+        "medium": "Improved seed, row planting, two weedings, regular picking.",
+        "high": "Improved or virus-tolerant varieties, raised beds, mulch and irrigation, strict picking interval, nematode-aware rotation."
+      },
+      "limitations": "Indicative ranges only. Because okra is picked repeatedly, the harvest window is a management decision as much as a climate response. No yield or price is implied.",
+      "evidence_quality": "verified_source",
+      "source_ids": ["fao_ecocrop", "fao_cropcalendar_gh"]
+    },
+    {
+      "id": "cashew",
+      "name": "Cashew",
+      "local_names": {},
+      "scientific_name": "Anacardium occidentale",
+      "perennial": true,
+      "cycle_days": {
+        "min": 1095,
+        "max": 1460,
+        "typical": 1278
+      },
+      "growth_stages": [
+        {
+          "name": "Nursery",
+          "start_day": 0,
+          "end_day": 90,
+          "notes": "Days from sowing. Use improved planting material; seedlings are ready at about 2-3 months."
+        },
+        {
+          "name": "Field establishment",
+          "start_day": 90,
+          "end_day": 365,
+          "notes": "Plant at the onset of rains; weed competition in the first two years decides tree vigour."
+        },
+        {
+          "name": "Immature phase",
+          "start_day": 365,
+          "end_day": 1095,
+          "notes": "Canopy development; formative pruning and intercropping with annuals are common."
+        },
+        {
+          "name": "First bearing and first harvest",
+          "start_day": 1095,
+          "end_day": 1460,
+          "notes": "First commercial harvest at about 3-4 years. Trees then bear for decades; the mature phase is not modelled here."
+        }
+      ],
+      "water": {
+        "seasonal_rainfall_mm": [800, 1600],
+        "drought_tolerance": "high",
+        "critical_stages": ["flowering", "nut development"],
+        "irrigation_note": "Rainfed tree crop of the transition and savannah zones. It tolerates a marked dry season but flowering and nut set need moisture; prolonged drought reduces nut size and increases immature nut fall."
+      },
+      "soil": {
+        "ph": [4.8, 7.0],
+        "ph_optimal": [5.5, 6.5],
+        "texture_preferred": ["loamy sand", "sandy loam", "loam"],
+        "drainage": "well",
+        "salinity_tolerance": "low",
+        "fertility_note": "Deep, well-drained sandy soils suit cashew; it is sensitive to waterlogging and to hardpans. Young trees benefit from mulch and from intercropping that suppresses weeds."
+      },
+      "temperature_c": {
+        "mean_min": 16,
+        "mean_max": 36,
+        "optimal": [22, 32],
+        "heat_risk_note": "Heat and drought during flowering reduce nut set; cashew is more heat-tolerant than cocoa but not than millet."
+      },
+      "slope_max_percent": 20,
+      "seasons": null,
+      "seasons_note": "Perennial tree crop. Planting is done at the onset of the rains, but flowering and harvest are annual events driven by the dry season rather than by a planting window: flowering typically falls in the dry season with harvest in the first half of the following year. seasons is null because there is no single planting-to-harvest season.",
+      "agro_ecological_suitability": {
+        "forest": "Limited; humidity and rainfall are higher than cashew prefers.",
+        "transition": "A major cashew zone, especially around Wenchi and Kintampo.",
+        "guinea_savannah": "A major cashew area in the Northern and Savannah regions.",
+        "sudan_savannah": "Marginal; dry-season heat and water shortage limit nut set.",
+        "coastal_savannah": "Grown on sandy soils; rainfall is on the low side but acceptable."
+      },
+      "common_stresses": ["cashew anthracnose", "tea mosquito bug", "cashew stem and root borer", "powdery mildew", "dry-season water deficit at flowering", "fire in the dry season"],
+      "management_notes": {
+        "low": "Unselected seedlings, no pruning, no weed management, no fire protection.",
+        "medium": "Improved planting material, early weeding, formative pruning, fire belts.",
+        "high": "Grafted improved varieties, planned spacing, canopy management, integrated pest management, fire protection and intercropping during establishment."
+      },
+      "limitations": "Indicative ranges only. cycle_days is time to first harvest, not tree life. Nut quality, kernel out-turn and price are out of scope, and this is not a yield forecast.",
+      "evidence_quality": "verified_source",
+      "source_ids": ["fao_ecocrop", "fao_cropcalendar_gh", "ghana_seed_policy_2013"]
+    },
+    {
+      "id": "oil_palm",
+      "name": "Oil palm",
+      "local_names": {},
+      "scientific_name": "Elaeis guineensis",
+      "perennial": true,
+      "cycle_days": {
+        "min": 900,
+        "max": 1260,
+        "typical": 1080
+      },
+      "growth_stages": [
+        {
+          "name": "Nursery",
+          "start_day": 0,
+          "end_day": 90,
+          "notes": "Days from sowing. Pre-nursery then main nursery; seedlings are field-ready at about 10-14 months in practice, which is longer than the main nursery stage shown here."
+        },
+        {
+          "name": "Field establishment",
+          "start_day": 90,
+          "end_day": 365,
+          "notes": "Plant at the onset of the rains; ring weeding and mulch around the base."
+        },
+        {
+          "name": "Immature phase",
+          "start_day": 365,
+          "end_day": 900,
+          "notes": "Canopy and trunk formation; legume cover crops and weeding dominate the work."
+        },
+        {
+          "name": "First harvest and mature production",
+          "start_day": 900,
+          "end_day": 1260,
+          "notes": "First bunches at about 30-42 months. The mature phase then lasts 20-25 years; it is described here but not modelled."
+        }
+      ],
+      "water": {
+        "seasonal_rainfall_mm": [1500, 2500],
+        "drought_tolerance": "low",
+        "critical_stages": ["establishment in field", "bunch development"],
+        "irrigation_note": "Needs a humid climate with well-distributed rainfall. A pronounced dry season reduces sex ratio (more male inflorescences) and bunch weight, and prolonged drought can cause frond desiccation."
+      },
+      "soil": {
+        "ph": [4.5, 6.8],
+        "ph_optimal": [5.0, 6.0],
+        "texture_preferred": ["loam", "clay loam", "silt loam"],
+        "drainage": "well",
+        "salinity_tolerance": "low",
+        "fertility_note": "Deep, well-drained, fertile soils with good water-holding capacity. Oil palm tolerates acidity but not waterlogging or coarse droughty sands; potassium demand for bunch production is high."
+      },
+      "temperature_c": {
+        "mean_min": 18,
+        "mean_max": 34,
+        "optimal": [22, 32],
+        "heat_risk_note": "Growth and bunch production slow below about 20 C; very high temperatures with dry air increase abortion of female inflorescences."
+      },
+      "slope_max_percent": 15,
+      "seasons": null,
+      "seasons_note": "Perennial tree crop with a 20-25 year productive life. Field planting is done at the onset of rains, but harvesting is continuous once bearing starts, so seasons is null. The short nursery stage in this table understates normal practice, where seedlings spend 10-14 months in the nursery before field planting.",
+      "agro_ecological_suitability": {
+        "forest": "The primary oil palm zone; the humid south-west suits it best.",
+        "transition": "Grown and expanding, though dry seasons reduce bunch weight.",
+        "guinea_savannah": "Not suitable without irrigation; too dry.",
+        "sudan_savannah": "Not suitable.",
+        "coastal_savannah": "Grown in parts of the coastal belt; dry season and sandy soils are constraints."
+      },
+      "common_stresses": ["fusarium wilt (Ghana)", "bud rot", "bagworm", "rhinoceros beetle", "dry-season water deficit", "potassium deficiency on sandy soils"],
+      "management_notes": {
+        "low": "Unselected seedlings, no cover crop, irregular harvesting, no pruning.",
+        "medium": "Improved tenera material, ring weeding, legume cover crop, regular harvesting rounds.",
+        "high": "Certified tenera seedlings from a known source, planned spacing, cover crops, nutrient management based on leaf and soil analysis, tight harvest rounds for oil quality."
+      },
+      "limitations": "Indicative ranges only. Smallholder oil palm is usually intercropped and harvested by hand, so bunch quality and harvest interval matter more than climate ranges. cycle_days is time to first harvest; no yield, oil extraction rate or price is implied.",
+      "evidence_quality": "verified_source",
+      "source_ids": ["fao_ecocrop", "ghana_seed_policy_2013", "fao_cropcalendar_gh"]
+    },
+    {
+      "id": "sweet_potato",
+      "name": "Sweet potato",
+      "local_names": {},
+      "scientific_name": "Ipomoea batatas",
+      "perennial": false,
+      "cycle_days": {
+        "min": 90,
+        "max": 150,
+        "typical": 120
+      },
+      "growth_stages": [
+        {
+          "name": "Land preparation and vine cuttings",
+          "start_day": -14,
+          "end_day": 0,
+          "notes": "Ridges or mounds with friable soil; use healthy vine cuttings of 25-30 cm."
+        },
+        {
+          "name": "Establishment",
+          "start_day": 0,
+          "end_day": 30,
+          "notes": "Cuttings root within days if soil is moist; replant gaps early."
+        },
+        {
+          "name": "Vine growth",
+          "start_day": 30,
+          "end_day": 60,
+          "notes": "Rapid ground cover; avoid excessive nitrogen, which favours vines over roots."
+        },
+        {
+          "name": "Root bulking",
+          "start_day": 60,
+          "end_day": 100,
+          "notes": "The yield-forming stage; weevil damage and drought both reduce marketable roots."
+        },
+        {
+          "name": "Maturity and harvest",
+          "start_day": 100,
+          "end_day": 140,
+          "notes": "Harvest when the skin does not rub off easily; cure roots before storage or transport."
+        }
+      ],
+      "water": {
+        "seasonal_rainfall_mm": [500, 900],
+        "drought_tolerance": "moderate",
+        "critical_stages": ["vine establishment", "root bulking"],
+        "irrigation_note": "Rainfed, with some dry-season production on residual moisture and in valley bottoms. It is more drought-tolerant than most vegetables but yields poorly on hard or waterlogged soils."
+      },
+      "soil": {
+        "ph": [5.0, 7.0],
+        "ph_optimal": [5.5, 6.5],
+        "texture_preferred": ["loamy sand", "sandy loam"],
+        "drainage": "well",
+        "salinity_tolerance": "low",
+        "fertility_note": "Prefers light, loose soils that allow root expansion. Too much nitrogen gives vine at the expense of roots; potassium supports root bulking."
+      },
+      "temperature_c": {
+        "mean_min": 15,
+        "mean_max": 35,
+        "optimal": [20, 30],
+        "heat_risk_note": "Growth slows below about 18 C; very high soil temperatures on bare ridges can damage developing roots."
+      },
+      "slope_max_percent": 15,
+      "seasons": {
+        "south_bimodal": {
+          "major": {
+            "planting_window": [[3, 1], [5, 31]],
+            "harvest_window": [[6, 15], [9, 30]]
+          },
+          "minor": {
+            "planting_window": [[8, 1], [10, 31]],
+            "harvest_window": [[11, 15], [12, 31]]
+          }
+        },
+        "north_unimodal": {
+          "single": {
+            "planting_window": [[1, 1], [2, 28]],
+            "harvest_window": [[3, 1], [6, 30]]
+          }
+        }
+      },
+      "seasons_note": "In the north sweet potato is characteristically planted in the dry season on residual moisture and harvested in the early rains, which is why the window sits outside the main cereal season; FAO's Ghana calendar describes it as a hunger-breaker crop planted December-March and harvested March-June in the Upper East. In the north, planting begins in November-December on residual moisture and continues to the end of February; the January-February span shown is the part that does not wrap the calendar year. Harvest also often continues into January in the south.",
+      "agro_ecological_suitability": {
+        "forest": "Grown, but cassava and plantain are more important.",
+        "transition": "Grown as a food-security and early-harvest crop.",
+        "guinea_savannah": "Widely grown, including dry-season plantings on residual moisture.",
+        "sudan_savannah": "Important as a hunger-breaker crop in the Upper East.",
+        "coastal_savannah": "Grown on sandy soils, often in home gardens."
+      },
+      "common_stresses": ["sweet potato virus disease", "sweet potato weevils", "root rot in wet soils", "drought during bulking", "nematodes"],
+      "management_notes": {
+        "low": "Own vine cuttings, flat planting, no inputs, late harvest.",
+        "medium": "Clean cuttings, ridging, one or two weedings, timely harvest.",
+        "high": "Virus-free planting material, ridging with organic matter, rotation, weevil management, curing before storage."
+      },
+      "limitations": "Indicative ranges only. Local varieties range from about 90 to 150 days maturity. Storage life is short, which often drives harvest timing more than agronomy does.",
+      "evidence_quality": "verified_source",
+      "source_ids": ["fao_ecocrop", "fao_cropcalendar_gh"]
+    },
+    {
+      "id": "garden_egg",
+      "name": "Garden egg (African eggplant)",
+      "local_names": {
+        "tw": "ntorowa"
+      },
+      "scientific_name": "Solanum aethiopicum",
+      "perennial": false,
+      "cycle_days": {
+        "min": 90,
+        "max": 145,
+        "typical": 110
+      },
+      "growth_stages": [
+        {
+          "name": "Nursery",
+          "start_day": -30,
+          "end_day": 0,
+          "notes": "Raise seedlings on a raised bed; they are ready to transplant at about 4 weeks."
+        },
+        {
+          "name": "Transplanting and establishment",
+          "start_day": 0,
+          "end_day": 20,
+          "notes": "Transplant into moist soil; garden egg recovers slowly from root damage."
+        },
+        {
+          "name": "Vegetative and flowering",
+          "start_day": 20,
+          "end_day": 50,
+          "notes": "First flowers at about 5-7 weeks after transplanting."
+        },
+        {
+          "name": "Fruit development",
+          "start_day": 50,
+          "end_day": 80,
+          "notes": "Fruit is picked immature for the fresh market; fruit borer damage is most visible now."
+        },
+        {
+          "name": "Harvest window",
+          "start_day": 80,
+          "end_day": 120,
+          "notes": "Repeated picking over several weeks; over-mature fruit turns bitter and seedy."
+        }
+      ],
+      "water": {
+        "seasonal_rainfall_mm": [500, 900],
+        "drought_tolerance": "moderate",
+        "critical_stages": ["flowering", "fruit set"],
+        "irrigation_note": "Rainfed in the rainy season and irrigated in the dry season near urban markets. It is somewhat more tolerant of dry spells than tomato but still drops flowers under stress."
+      },
+      "soil": {
+        "ph": [5.5, 7.0],
+        "ph_optimal": [6.0, 6.8],
+        "texture_preferred": ["loam", "sandy loam"],
+        "drainage": "well",
+        "salinity_tolerance": "low",
+        "fertility_note": "Moderate feeder; organic matter and balanced nutrients give better fruit size. Excess nitrogen produces leaf at the expense of fruit."
+      },
+      "temperature_c": {
+        "mean_min": 16,
+        "mean_max": 34,
+        "optimal": [22, 30],
+        "heat_risk_note": "Heat above about 34 C reduces fruit set; the crop performs best in the warm, moderately humid south."
+      },
+      "slope_max_percent": 15,
+      "seasons": {
+        "south_bimodal": {
+          "major": {
+            "planting_window": [[3, 15], [5, 31]],
+            "harvest_window": [[6, 15], [9, 30]]
+          },
+          "minor": {
+            "planting_window": [[8, 1], [9, 30]],
+            "harvest_window": [[10, 15], [12, 31]]
+          }
+        },
+        "north_unimodal": {
+          "single": {
+            "planting_window": [[6, 1], [8, 15]],
+            "harvest_window": [[9, 1], [12, 15]]
+          }
+        }
+      },
+      "seasons_note": "Garden egg is grown in both southern seasons and is a common dry-season irrigated crop near cities. FAO's Ghana calendar lists eggplant as an all-year crop with a 60-70 day cycle, which was too coarse to use as a window. Minor-season picking commonly extends into January; the window is cut at 31 December to avoid wrapping the calendar year.",
+      "agro_ecological_suitability": {
+        "forest": "Widely grown in home gardens and for urban markets.",
+        "transition": "Grown, with a long harvest into the dry season.",
+        "guinea_savannah": "Grown in the rainy season and under irrigation near towns.",
+        "sudan_savannah": "Grown mainly under irrigation; the dry season is severe.",
+        "coastal_savannah": "Common, including dry-season irrigated plots on the Accra plains."
+      },
+      "common_stresses": ["bacterial wilt", "fruit borer", "phomopsis blight", "root-knot nematode", "flower drop in heat"],
+      "management_notes": {
+        "low": "Local seed, flat beds, rainfed, irregular picking.",
+        "medium": "Improved seed, nursery, row planting, two weedings.",
+        "high": "Improved varieties, raised beds with mulch, irrigation, staking where needed, nematode-aware rotation, strict picking interval."
+      },
+      "limitations": "Indicative ranges only. Garden egg in Ghana covers several Solanum aethiopicum and S. melongena types with different fruit size, colour and maturity; this entry does not separate them, and gives no yield or price.",
+      "evidence_quality": "verified_source",
+      "source_ids": ["fao_ecocrop", "fao_cropcalendar_gh"]
+    },
+    {
+      "id": "onion",
+      "name": "Onion",
+      "local_names": {},
+      "scientific_name": "Allium cepa",
+      "perennial": false,
+      "cycle_days": {
+        "min": 90,
+        "max": 150,
+        "typical": 120
+      },
+      "growth_stages": [
+        {
+          "name": "Nursery",
+          "start_day": -40,
+          "end_day": 0,
+          "notes": "Nursery sowing to transplanting; seedlings are ready at about 5-6 weeks in warm conditions."
+        },
+        {
+          "name": "Transplanting and establishment",
+          "start_day": 0,
+          "end_day": 25,
+          "notes": "Transplant bare-root seedlings into a fine, level bed; shallow planting avoids bulb deformity."
+        },
+        {
+          "name": "Leaf growth",
+          "start_day": 25,
+          "end_day": 60,
+          "notes": "Leaf number drives bulb size; keep moisture steady and weeds out."
+        },
+        {
+          "name": "Bulb initiation and enlargement",
+          "start_day": 60,
+          "end_day": 100,
+          "notes": "Bulbing responds to day length and temperature; stop nitrogen as bulbing starts."
+        },
+        {
+          "name": "Maturity, curing and harvest",
+          "start_day": 100,
+          "end_day": 140,
+          "notes": "Tops fall and necks soften; lift, cure and store in a dry, ventilated place."
+        }
+      ],
+      "water": {
+        "seasonal_rainfall_mm": [350, 600],
+        "drought_tolerance": "low",
+        "critical_stages": ["bulb initiation", "bulb enlargement"],
+        "irrigation_note": "In Ghana onion is almost entirely an irrigated dry-season crop; it needs frequent light irrigation and cannot compete with weeds for water. Stop irrigation as necks soften to improve storage."
+      },
+      "soil": {
+        "ph": [5.8, 7.2],
+        "ph_optimal": [6.0, 6.8],
+        "texture_preferred": ["loam", "sandy loam", "silt loam"],
+        "drainage": "well",
+        "salinity_tolerance": "low",
+        "fertility_note": "Needs a fine, level seedbed and good drainage; heavy clay produces deformed bulbs. It is sensitive to sulphur and zinc shortage and to excess nitrogen late in the season."
+      },
+      "temperature_c": {
+        "mean_min": 10,
+        "mean_max": 30,
+        "optimal": [15, 25],
+        "heat_risk_note": "Bulbing is driven by day length and temperature; very high temperatures and long days cause early, small bulbs and bolting."
+      },
+      "slope_max_percent": 8,
+      "seasons": {
+        "south_bimodal": {
+          "major": {
+            "planting_window": [[10, 1], [11, 30]],
+            "harvest_window": [[1, 15], [3, 31]]
+          },
+          "minor": {
+            "planting_window": [[2, 1], [3, 31]],
+            "harvest_window": [[5, 1], [6, 30]]
+          }
+        },
+        "north_unimodal": {
+          "single": {
+            "planting_window": [[11, 1], [12, 31]],
+            "harvest_window": [[2, 1], [4, 15]]
+          }
+        }
+      },
+      "seasons_note": "Onion is grown under irrigation in the dry season, not in the rainy season, so its windows run opposite to the cereal calendar. FAO's Ghana calendar onion row (sowing August-November, harvest late September-early October) is internally inconsistent and was not used for the windows. Harvest therefore falls in the calendar year after planting.",
+      "agro_ecological_suitability": {
+        "forest": "Grown near urban markets with irrigation; humidity increases disease risk.",
+        "transition": "A significant onion area, including the Techiman and Akumadan districts.",
+        "guinea_savannah": "Grown under irrigation in the dry season.",
+        "sudan_savannah": "Grown under irrigation; heat is a constraint on bulb quality.",
+        "coastal_savannah": "Important irrigated dry-season production, including the Keta area and the Accra plains."
+      },
+      "common_stresses": ["thrips", "purple blotch", "downy mildew", "bolting (early flowering)", "storage rots", "weed competition"],
+      "management_notes": {
+        "low": "Own seed, flat beds, irregular irrigation, no curing.",
+        "medium": "Improved seed, raised beds, regular irrigation, two weedings, curing before storage.",
+        "high": "Certified seed of a locally adapted variety, raised beds with precise irrigation, scheduled scouting, nitrogen timing to match bulbing, proper curing and ventilated storage."
+      },
+      "limitations": "Indicative ranges only. Bulbing depends on day length and variety, which this file does not model; a variety suited to one latitude and season can fail in another. No yield, price or storage-loss figure is given.",
+      "evidence_quality": "verified_source",
+      "source_ids": ["fao_ecocrop", "fao56", "fao_cropcalendar_gh"]
+    }
+  ]
+}

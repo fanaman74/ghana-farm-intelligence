@@ -1,0 +1,30 @@
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: ghana-farm-intelligence:latest
+    container_name: ghana-farm-intelligence
+    ports:
+      - "8000:8000"
+    environment:
+      GFI_ENV: production
+      GFI_DATA_DIR: /data
+      # Set a token to protect administrator endpoints (advisories, prices).
+      GFI_ADMIN_TOKEN: ${GFI_ADMIN_TOKEN:-}
+      # comma-separated extra origins if you serve the UI from another host
+      GFI_CORS_ORIGINS: ${GFI_CORS_ORIGINS:-}
+      GFI_ALLOW_NETWORK: "true"
+      GFI_JOB_WORKERS: "3"
+    volumes:
+      - gfi-data:/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8000/api/health"]
+      interval: 30s
+      timeout: 6s
+      retries: 3
+      start_period: 30s
+
+volumes:
+  gfi-data:

@@ -1,0 +1,37 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+.ruff_cache/
+
+# Node / frontend
+node_modules/
+frontend/dist/
+frontend/docs/
+frontend/.vite/
+playwright-report/
+test-results/
+frontend/test-results/
+frontend/playwright-report/
+
+# Runtime data (not part of the source deliverable)
+backend/data/raw/*.pbf
+backend/data/raw/*.cpg
+backend/data/gfi.sqlite3
+backend/data/gfi.sqlite3-*
+backend/data/cache/
+backend/data/seed/**/*.tmp.tif
+_scratch/
+*.log
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+
+# Local secrets
+.env
+.env.local

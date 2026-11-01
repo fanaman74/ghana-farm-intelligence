@@ -1,0 +1,58 @@
+{
+  "measured_at": "2026-10-31T16:39:39.769Z",
+  "base_url": "http://127.0.0.1:8000",
+  "desktop": {
+    "mapCanvasMs": 591,
+    "domContentLoadedMs": 236,
+    "loadMs": 236,
+    "resourceCount": 15,
+    "transferKB": 813,
+    "jsKB": 381,
+    "cssKB": 19,
+    "fontKB": 0
+  },
+  "mobile": {
+    "mapCanvasMs": 600,
+    "frames": 467,
+    "medianFrameMs": 66.8,
+    "p95FrameMs": 83.4,
+    "approxFps": 15
+  },
+  "analysis": {
+    "cold_wall_ms": 14133,
+    "server_elapsed_ms": 13786,
+    "warm_cached_ms": 44,
+    "warm_cached": true,
+    "section_status": {
+      "weather": "ok",
+      "soil": "ok",
+      "landcover": "ok",
+      "terrain": "ok",
+      "rainfall": "ok",
+      "vegetation": "ok",
+      "water": "unavailable",
+      "crops": "ok",
+      "calendar": "ok",
+      "recommendations": "ok"
+    },
+    "payload_bytes": 94727,
+    "farm_area_ha": 31.6999
+  },
+  "health": {
+    "status": "ok",
+    "app": "Ghana Farm Intelligence",
+    "version": "1.0.0",
+    "database": "ok",
+    "time": {
+      "iso": "2026-10-31T16:40:34+00:00",
+      "time": "16:40",
+      "date": "31 Oct 2026",
+      "weekday": "Saturday",
+      "timezone": "Africa/Accra",
+      "utc_offset": "+0000"
+    },
+    "network_access": true,
+    "data_dir": "C:\\Users\\fred\\Downloads\\Gh-farmers\\backend\\data",
+    "seed_available": true
+  }
+}

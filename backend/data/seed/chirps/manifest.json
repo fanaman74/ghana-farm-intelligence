@@ -1,0 +1,39 @@
+{
+ "dataset": "CHIRPS v2.0 1991\u20132020 monthly climatology (Ghana)",
+ "provider": "UCSB Climate Hazards Center, mirrored by Digital Earth Africa",
+ "source": "https://deafrica-input-datasets.s3.af-south-1.amazonaws.com/rainfall_chirps_monthly/",
+ "documentation": "https://docs.digitalearthafrica.org/en/latest/data_specs/CHIRPS_specs.html",
+ "licence": "Public domain (CHIRPS v2.0)",
+ "attribution": "Funk et al. (2015), CHIRPS v2.0, UCSB Climate Hazards Center",
+ "generated_at": "2026-10-31T16:52:24+00:00",
+ "years": [
+  1991,
+  2020
+ ],
+ "bands": "1\u201312 = January\u2013December mean rainfall (mm/month)",
+ "band_spatial_means_mm": {
+  "1": 8.2,
+  "2": 22.5,
+  "3": 64.8,
+  "4": 105.9,
+  "5": 142.2,
+  "6": 169.9,
+  "7": 154.3,
+  "8": 146.7,
+  "9": 183.5,
+  "10": 138.1,
+  "11": 37.8,
+  "12": 13.8
+ },
+ "file": "ghana_climatology_1991_2020.tif",
+ "bytes": 430598,
+ "missing_files": [],
+ "expected_month_files": 360,
+ "received_month_files": 360,
+ "elapsed_seconds": 44.2,
+ "validation": "Per-month means must differ across bands (the seasonal cycle). Compare a band with the mean of the same calendar month's raw COGs over a few years.",
+ "notes": [
+  "Values are calendar-month means over the period, not a trend.",
+  "Anomalies in the app compare the same calendar days with this baseline."
+ ]
+}
