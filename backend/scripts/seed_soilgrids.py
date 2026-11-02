@@ -19,6 +19,7 @@ from pathlib import Path
 BACKEND = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(BACKEND))
 
+from app.providers.soilgrids import PROPERTIES as SOIL_PROPERTIES  # noqa: E402
 from app.providers.soilgrids_layers import SEED_VRT_DIR, build_seed, vrt_url  # noqa: E402
 
 PROPERTIES = ["phh2o", "soc", "nitrogen", "clay", "sand", "silt", "cec", "bdod", "cfvo"]
@@ -53,7 +54,10 @@ def main() -> int:
         "layers": results,
         "total_bytes": total,
         "grid": {"crs": "EPSG:4326", "approx_resolution_m": 250, "native_tile_px": 600},
-        "scale_factors": {prop: (100.0 if prop == "bdod" else 10.0) for prop in PROPERTIES},
+        # Taken from the runtime table rather than re-declared here: the manifest
+        # used to disagree with the app for nitrogen and cfvo (ISRIC factors are
+        # 100 for both), which no plausibility range could catch.
+        "scale_factors": {prop: SOIL_PROPERTIES[prop]["scale"] for prop in PROPERTIES},
         "example_source": vrt_url("phh2o", "0-5cm", "mean"),
         "notes": [
             "Only VRT mosaic indexes are bundled; no SoilGrids raster values are redistributed.",

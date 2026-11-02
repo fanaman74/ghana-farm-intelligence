@@ -32,6 +32,7 @@ from shapely.ops import unary_union
 from shapely.validation import explain_validity
 
 from ..config import GHANA_BOUNDS, SEED_DIR, settings
+from ..utils import stable_hash
 
 GEOD = Geod(ellps="WGS84")
 EQUAL_AREA = "EPSG:6933"
@@ -224,6 +225,19 @@ def ensure_shapely(geom: Any) -> Polygon | MultiPolygon:
     return normalised
 
 
+def polygon_hash(raw: Any, digits: int = 6) -> str:
+    """Stable identity for a boundary, derived from its rings.
+
+    Cache keys and overlay filenames must never identify a polygon by its
+    bounding box: two different fields can share one (a diagonal split of a
+    rectangle gives two triangles with identical bboxes) and would then be
+    served each other's soil, rainfall and imagery.
+    """
+    geom = ensure_shapely(raw)
+    payload = mapping(geom)
+    return stable_hash([geom.geom_type, round_coords(payload["coordinates"], digits)])
+
+
 # --------------------------------------------------------------------------- #
 # Measurements
 # --------------------------------------------------------------------------- #
@@ -282,18 +296,31 @@ def ghana_outline() -> Polygon | MultiPolygon | None:
     return None
 
 
+@lru_cache(maxsize=4)
+def _buffered_outline(buffer_deg: float) -> Polygon | MultiPolygon | None:
+    """The national outline, buffered once instead of once per vertex.
+
+    ``is_in_ghana`` used to call ``outline.buffer()`` for every vertex, which is
+    thousands of full-geometry buffers on an imported boundary.
+    """
+    outline = ghana_outline()
+    if outline is None:
+        return None
+    return outline.buffer(buffer_deg)
+
+
 def is_in_ghana(lon: float, lat: float, buffer_deg: float = 0.02) -> bool:
     if not (
         GHANA_BOUNDS["min_lat"] - buffer_deg <= lat <= GHANA_BOUNDS["max_lat"] + buffer_deg
         and GHANA_BOUNDS["min_lon"] - buffer_deg <= lon <= GHANA_BOUNDS["max_lon"] + buffer_deg
     ):
         return False
-    outline = ghana_outline()
-    if outline is None:
+    buffered = _buffered_outline(buffer_deg)
+    if buffered is None:
         return True
     from shapely.geometry import Point
 
-    return outline.buffer(buffer_deg).contains(Point(lon, lat))
+    return buffered.contains(Point(lon, lat))
 
 
 def validate_geometry(

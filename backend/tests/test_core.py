@@ -46,6 +46,29 @@ FARM_NORTH = {
 # --------------------------------------------------------------------------- #
 # Geodesy
 # --------------------------------------------------------------------------- #
+def test_kml_import_warns_when_only_one_polygon_is_kept():
+    """Multi-part KML used to import silently as one part."""
+    kml = """<?xml version="1.0"?><kml xmlns="http://www.opengis.net/kml/2.2"><Document>
+    <Placemark><name>Two parts</name><Polygon><outerBoundaryIs><LinearRing><coordinates>
+    -1.4542,6.6974,0 -1.4494,6.6971,0 -1.4482,6.7001,0 -1.4539,6.7017,0 -1.4542,6.6974,0
+    </coordinates></LinearRing></outerBoundaryIs></Polygon></Placemark>
+    <Placemark><name>Second</name><Polygon><outerBoundaryIs><LinearRing><coordinates>
+    -1.4600,6.6900,0 -1.4550,6.6900,0 -1.4550,6.6950,0 -1.4600,6.6950,0 -1.4600,6.6900,0
+    </coordinates></LinearRing></outerBoundaryIs></Polygon></Placemark>
+    </Document></kml>"""
+    parsed = importers.parse_upload("two.kml", kml.encode())
+    assert parsed["geometry"]["type"] == "Polygon"
+    assert any("only_largest_of_2_kml_polygons_imported" in warning for warning in parsed["warnings"])
+
+
+def test_kml_import_rejects_an_entity_expansion_attack():
+    """defusedxml must refuse DTDs instead of expanding them."""
+    bomb = """<?xml version="1.0"?><!DOCTYPE lolz [<!ENTITY lol "lol">
+    <!ENTITY lol2 "&lol;&lol;&lol;&lol;">]><kml><Placemark><name>&lol2;</name></Placemark></kml>"""
+    with pytest.raises(GeometryError):
+        importers.parse_upload("bomb.kml", bomb.encode())
+
+
 def test_geodesic_area_and_perimeter():
     geom = ensure_shapely(FARM_SOUTH)
     area = geodesic_area_ha(geom)
@@ -434,3 +457,232 @@ def test_exports_geojson_kml_csv():
     assert "<kml" in kml and "Test farm" in kml
     csv_text = exports.farm_csv(farm)
     assert "area_ha" in csv_text and "Test farm" in csv_text
+
+
+# --------------------------------------------------------------------------- #
+# Regressions: boundary identity, masked statistics, honest scoring
+# --------------------------------------------------------------------------- #
+def _triangle(upper: bool):
+    """Two triangles that share one bounding box (a diagonal split)."""
+    from shapely.geometry import Polygon
+
+    if upper:
+        return Polygon([[0.0, 0.0], [1.0, 1.0], [0.0, 1.0], [0.0, 0.0]])
+    return Polygon([[0.0, 0.0], [1.0, 0.0], [1.0, 1.0], [0.0, 0.0]])
+
+
+def test_polygon_hash_distinguishes_identical_bounding_boxes():
+    """A bbox is not a boundary: two fields can share one exactly."""
+    from app.geo.geodesy import polygon_hash
+
+    lower, upper = _triangle(False), _triangle(True)
+    assert lower.bounds == upper.bounds
+    assert polygon_hash(lower) != polygon_hash(upper)
+    # Same ring, different instance: still the same boundary.
+    assert polygon_hash(lower) == polygon_hash(_triangle(False))
+
+
+def test_soil_statistics_ignore_pixels_outside_the_polygon():
+    """The mask is the field, never the padded bounding-box window."""
+    from app.providers.soilgrids import PROPERTIES, sample_stats
+
+    values = np.full((3, 3), 90.0)  # neighbours: pH 9.0
+    values[1, 1] = 57.0  # the field only covers the centre cell: pH 5.7
+    mask = np.zeros((3, 3), dtype=bool)
+    mask[1, 1] = True
+    weights = np.ones((3, 3), dtype="float64")
+
+    stats = sample_stats(values, mask, weights, PROPERTIES["phh2o"], -32768.0)
+    assert stats["mean"] == pytest.approx(5.7)
+    assert stats["pixels_in_polygon"] == 1
+    assert stats["valid_fraction"] == pytest.approx(1.0)
+
+
+def test_soilgrids_zero_is_reported_as_no_prediction_not_zero():
+    """ISRIC uses 0 for "no prediction"; it must not become a measured 0 %."""
+    from app.providers.soilgrids import PROPERTIES, sample_stats
+
+    values = np.array([[0.0, 5000.0]])  # cfvo is vol % * 100
+    mask = np.ones((1, 2), dtype=bool)
+    weights = np.ones((1, 2), dtype="float64")
+
+    stats = sample_stats(values, mask, weights, PROPERTIES["cfvo"], -32768.0)
+    assert stats["mean"] == pytest.approx(50.0)
+    assert stats["valid_fraction"] == pytest.approx(0.5)
+    assert stats["zeros_without_prediction"] == 1
+
+
+def test_texture_class_is_none_when_composition_is_unclassifiable():
+    """The old fallback invented "Loam", which scores 100 for most crops."""
+    from app.providers.soilgrids import usda_texture_class
+
+    assert usda_texture_class(20, 10, 70) is None
+    assert usda_texture_class(90, 5, 5) == "Sand"
+
+
+def test_missing_component_cannot_reach_high_confidence():
+    """Dropping rainfall (the heaviest component) must lower, not raise, the verdict."""
+    maize = crop_kb.get_crop("maize")
+    full = suitability.evaluate_crop(maize, _context())
+    missing_rain = suitability.evaluate_crop(maize, _context(monthly_rainfall_mm=None))
+
+    assert full["data_coverage"] == pytest.approx(1.0)
+    assert missing_rain["data_coverage"] < 0.85
+    assert missing_rain["confidence"] != "high"
+    assert missing_rain["category"] != "highly_suitable"
+    # Ranking discounts absent evidence even though the observed mean is unchanged.
+    assert missing_rain["rank_score"] < full["rank_score"]
+
+
+def _planting_context(past_mm: float, future_mm: float):
+    from datetime import timedelta
+
+    today = date(2026, 10, 31)
+    days = [today - timedelta(days=i) for i in range(4, -1, -1)]
+    days += [today + timedelta(days=i) for i in range(0, 6)]
+    weather_daily = [
+        {
+            "date": day.isoformat(),
+            "precipitation_mm": past_mm if day < today else future_mm,
+            "precipitation_probability": 80 if day >= today else 0,
+            "temperature_max_c": 32.0,
+            "temperature_min_c": 22.0,
+            "et0_mm": 4.0,
+        }
+        for day in days
+    ]
+    daily_series = [{"date": (today - timedelta(days=i)).isoformat(), "mm": 3.0} for i in range(14)]
+    crop = {
+        "id": "maize",
+        "name": "Maize",
+        "perennial": False,
+        "planting_window": {
+            "state": "open",
+            "label": "Rainy season",
+            "planting_window": {"label": "May 15 – July 10"},
+            "start_iso": "2026-05-15",
+            "days_to_window": 0,
+        },
+    }
+    sections = _sections()
+    sections["weather"]["data"]["daily"] = weather_daily
+    sections["rainfall"]["data"]["daily_series"] = daily_series
+    sections["selected_crop"] = crop
+    return sections
+
+
+def test_planting_advice_uses_the_forecast_not_the_past_five_days():
+    """Open-Meteo returns past_days=5 first; slicing [:5] read last week's rain."""
+    wet_past_dry_future = recs.build_recommendations(_planting_context(20.0, 0.0))
+    ids = {item["id"] for item in wet_past_dry_future["recommendations"]}
+    assert "planting_conditions" not in ids
+
+    dry_past_wet_future = recs.build_recommendations(_planting_context(0.0, 20.0))
+    ids = {item["id"] for item in dry_past_wet_future["recommendations"]}
+    assert "planting_conditions" in ids
+
+
+def test_analysis_deadline_and_progress_summary():
+    """A stuck job must stop with an explanation, and progress writes stay small."""
+    from app.analysis import _progress_summary, check_deadline
+
+    check_deadline(10.0, 300)  # fine
+    check_deadline(10_000.0, 0)  # budget disabled
+    with pytest.raises(GeometryError) as exc:
+        check_deadline(400.0, 300)
+    assert exc.value.code == "analysis_timeout"
+
+    summary = _progress_summary(
+        {
+            "partial": True,
+            "sections": {
+                "soil": {"key": "soil", "status": "ok", "data": {"x": list(range(500))}, "sources": [{}]},
+            },
+        }
+    )
+    assert summary["partial"] is True
+    assert summary["sections"]["soil"] == {"key": "soil", "status": "ok", "message": None}
+    assert len(json.dumps(summary)) < 200
+
+
+def test_seed_manifest_scale_factors_match_the_provider_table():
+    """The bundled manifest used to disagree with the app for nitrogen and cfvo.
+
+    ISRIC's conversion table (Poggio et al. 2021, SoilGrids 2.0): bdod 100→kg/dm³,
+    cec 10→cmol(c)/kg, cfvo 100→vol%, nitrogen 100→g/kg, phh2o 10→pH, texture and
+    soc 10→%/g kg⁻¹.
+    """
+    from app.config import SEED_DIR
+    from app.providers.soilgrids import PROPERTIES
+
+    path = SEED_DIR / "soilgrids_vrt" / "manifest.json"
+    if not path.exists():
+        pytest.skip("VRT seed manifest not built")
+    manifest = json.loads(path.read_text(encoding="utf-8"))
+    expected = {prop: spec["scale"] for prop, spec in PROPERTIES.items()}
+    assert manifest["scale_factors"] == expected
+    assert manifest["scale_factors"]["nitrogen"] == 100.0
+    assert manifest["scale_factors"]["cfvo"] == 100.0
+
+
+def test_analysis_area_guard_refuses_oversized_boundaries():
+    """A 50,000 ha boundary would read gigabytes per job with no explanation."""
+    from app.analysis import check_analysis_area
+
+    check_analysis_area(100.0, 20_000.0)  # fine
+    with pytest.raises(GeometryError) as exc:
+        check_analysis_area(30_000.0, 20_000.0)
+    assert exc.value.code == "area_too_large_for_analysis"
+    check_analysis_area(30_000.0, 0)  # limit disabled
+
+
+def test_rainfall_baseline_scales_to_the_days_actually_covered():
+    """A partial record must not be compared with a full-window baseline."""
+    from app.providers.chirps import _baseline_total
+
+    clim = {"monthly_mean_mm": {str(month): 100.0 for month in range(1, 13)}, "period": "1991–2020"}
+    start, end = date(2026, 9, 1), date(2026, 9, 30)
+    assert _baseline_total(start, end, clim) == pytest.approx(100.0)
+    assert _baseline_total(start, end, clim, days_covered=30) == pytest.approx(100.0)
+    assert _baseline_total(start, end, clim, days_covered=15) == pytest.approx(50.0)
+
+
+def test_pdf_export_survives_markup_in_the_farm_name():
+    """A name containing '<' used to raise ValueError (HTTP 500) from ReportLab."""
+    info = validate_geometry(FARM_SOUTH)
+    farm = {
+        "id": "abc",
+        "name": "Plot <A> & Sons",
+        "geometry": info.geometry,
+        "area_ha": info.area_ha,
+        "perimeter_m": info.perimeter_m,
+        "fields": [],
+        "soil_tests": [],
+        "records": [],
+    }
+    pdf = exports.farm_pdf(farm, None)
+    assert pdf.startswith(b"%PDF")
+    assert len(pdf) > 1000
+
+
+def test_analysis_key_changes_when_a_soil_test_is_recorded():
+    """Recording a lab result must invalidate the cached analysis."""
+    from app.analysis import analysis_key
+
+    farm = {
+        "id": "f1",
+        "geometry": FARM_SOUTH,
+        "fields": [],
+        "irrigation": "rainfed",
+        "soil_tests": [],
+        "advisories": [],
+    }
+    before = analysis_key(farm, None, "maize", None, "medium")
+    farm["soil_tests"] = [
+        {"id": "t1", "sampled_on": "2026-10-01", "ph": 5.4, "soc_gkg": 9.0, "texture_class": "Loam"}
+    ]
+    after = analysis_key(farm, None, "maize", None, "medium")
+    assert before != after
+
+    farm["advisories"] = [{"id": "adv-1"}]
+    assert analysis_key(farm, None, "maize", None, "medium") != after

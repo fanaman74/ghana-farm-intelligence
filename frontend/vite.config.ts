@@ -99,6 +99,17 @@ export default defineConfig({
   build: {
     target: "es2020",
     sourcemap: false,
-    chunkSizeWarningLimit: 1200,
+    // The map engine and the framework change rarely; splitting them keeps the
+    // app chunk small (334 kB vs 1,410 kB unsplit). MapLibre itself is one
+    // 1.0 MB vendor chunk and is the remaining first-load cost.
+    chunkSizeWarningLimit: 1100,
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          maplibre: ["maplibre-gl"],
+          react: ["react", "react-dom"],
+        },
+      },
+    },
   },
 });

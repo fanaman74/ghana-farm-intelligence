@@ -27,7 +27,7 @@ manylinux wheels (rasterio/shapely/pyproj bundle GDAL and PROJ — no system GDA
 built `dist/` to `/app/static`, and starts:
 
 ```
-uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000} --proxy-headers --forwarded-allow-ips=*
+uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000} --proxy-headers --forwarded-allow-ips=${GFI_FORWARDED_ALLOW_IPS:-127.0.0.1}
 ```
 
 Railway injects `$PORT`; the app binds it.
@@ -42,6 +42,10 @@ SQLite and provider caches are written to `GFI_DATA_DIR` (default `/data` in the
 
 Without a volume the app still works, but farms, records and caches are lost on every deploy/restart.
 
+The container starts as root only long enough to take ownership of the mounted volume, then runs the app
+as uid 10001 (`gfi`). If your volume is mounted for a different owner, set `GFI_APP_UID` / `GFI_APP_GID`
+to match; the entrypoint logs a warning when it cannot chown the directory.
+
 ## 3. Environment variables
 
 | Variable | Recommended | Why |
@@ -49,12 +53,21 @@ Without a volume the app still works, but farms, records and caches are lost on 
 | `GFI_ENV` | `production` | enables production logging defaults |
 | `GFI_DATA_DIR` | `/data` | persistent volume mount |
 | `GFI_ADMIN_TOKEN` | a long random string | protects advisory and market-price writes |
+| `GFI_ACCESS_TOKEN` | a long random string | gates farm boundaries, records, analyses and layers behind one shared secret |
+| `GFI_FORWARDED_ALLOW_IPS` | your platform's proxy range, or `*` | the container trusts `X-Forwarded-For` only from the loopback by default |
 | `GFI_CORS_ORIGINS` | usually unset | only needed if the UI is served from another domain |
 | `GFI_JOB_WORKERS` | `3` | parallel analysis jobs; raise carefully on small instances |
 | `GFI_ALLOW_DEMO_DATA` | `true` | keeps the clearly labelled sample farm available |
 | `GFI_LOG_LEVEL` | `INFO` | `DEBUG` is noisy around provider calls |
 
 Do **not** set `GFI_STATIC_DIR` — the image already points it at `/app/static`.
+
+> **One shared secret, not accounts.** Set `GFI_ACCESS_TOKEN` before you make the URL public: without
+> it, every boundary, field, record and analysis is readable and deletable by anyone who finds it.
+> With it, the web client asks for the token once and sends `X-Access-Token`; everyone holding the
+> token sees the same farms and there is no per-user audit trail. Use an authenticating proxy (Cloudflare
+> Access, Railway private networking) if you need separate users. `GET /api/health` reports the posture
+> under `auth`.
 
 ## 4. Keep one replica
 

@@ -32,7 +32,7 @@ from .utils import iso_now, parse_date, stable_hash
 
 log = logging.getLogger(__name__)
 
-ANALYSIS_VERSION = 1
+ANALYSIS_VERSION = 2
 _EXECUTOR = ThreadPoolExecutor(max_workers=max(2, settings.job_workers), thread_name_prefix="gfi-analysis")
 
 SECTION_LABELS = {
@@ -177,6 +177,38 @@ def _provenance(sections: dict[str, Section]) -> list[dict[str, Any]]:
 # --------------------------------------------------------------------------- #
 # Main build
 # --------------------------------------------------------------------------- #
+def check_analysis_area(area_ha: float, limit_ha: float) -> None:
+    """Refuse an analysis that would read an unreasonable number of pixels.
+
+    A 50,000 ha boundary (the storage limit) is ~5 M pixels per Sentinel-2 band,
+    read as float64, several bands at a time, on a 3-job pool. The job would
+    exhaust memory or time out with no explanation; refusing says why.
+    """
+    if limit_ha and area_ha > limit_ha:
+        raise GeometryError(
+            "area_too_large_for_analysis",
+            f"This boundary is {area_ha:,.0f} ha, above the {limit_ha:,.0f} ha analysis limit "
+            "(GFI_MAX_ANALYSIS_HA). Split it into fields and analyse each one.",
+            {"area_ha": area_ha, "max_analysis_ha": limit_ha},
+        )
+
+
+def check_deadline(elapsed_s: float, limit_s: float) -> None:
+    """Fail a run that has exceeded its wall-clock budget.
+
+    A thread blocked in a provider read cannot be cancelled cleanly, but between
+    sections the job can stop and say so instead of holding a worker — and the
+    client's progress bar — indefinitely.
+    """
+    if limit_s and elapsed_s > limit_s:
+        raise GeometryError(
+            "analysis_timeout",
+            f"This analysis exceeded its {limit_s:.0f}-second budget. Try a smaller boundary, or raise "
+            "GFI_ANALYSIS_TIMEOUT on the server.",
+            {"elapsed_s": round(elapsed_s, 1), "limit_s": limit_s},
+        )
+
+
 def build_analysis(
     farm: dict[str, Any],
     *,
@@ -189,6 +221,7 @@ def build_analysis(
     started = time.perf_counter()
     geom, area_ha, geometry_label = farm_geometry(farm, field_id)
     info = validate_geometry(geom)
+    check_analysis_area(info.area_ha, settings.max_analysis_ha)
 
     crop_id = crop_id or farm.get("crop_id")
     planting = parse_date(planting_date) or parse_date(farm.get("planting_date"))
@@ -219,6 +252,9 @@ def build_analysis(
             "partial": True,
         }
 
+    def budget() -> None:
+        check_deadline(time.perf_counter() - started, settings.analysis_timeout_s)
+
     emit("Reading forecast and terrain", False)
 
     # Fast, independent sections in parallel.
@@ -248,6 +284,7 @@ def build_analysis(
         sections["rainfall"] = _failed_section("rainfall", exc)
     steps_done += 1
     emit("Rainfall ready")
+    budget()
 
     emit("Fetching Sentinel-2 scenes")
     try:
@@ -256,6 +293,7 @@ def build_analysis(
         sections["vegetation"] = _failed_section("vegetation", exc)
     steps_done += 1
     emit("Satellite imagery ready")
+    budget()
 
     emit("Checking WaPOR")
     try:
@@ -263,6 +301,7 @@ def build_analysis(
     except Exception as exc:  # noqa: BLE001
         sections["water"] = _failed_section("water", exc)
     steps_done += 1
+    budget()
 
     # ---- Crop suitability -------------------------------------------------
     weather_data = sections["weather"].data
@@ -468,7 +507,8 @@ def _headline(sections: dict[str, Section], selected: dict[str, Any] | None, cro
     weather = sections["weather"]
     vegetation = sections["vegetation"]
     rainfall = sections["rainfall"]
-    ph = ((soil.data.get("modelled") or {}).get("profile_0_30") or {}).get("phh2o", {}).get("value")
+    measured = (soil.data.get("measured") or {}).get("ph")
+    ph = measured or ((soil.data.get("modelled") or {}).get("profile_0_30") or {}).get("phh2o", {}).get("value")
     current = weather.data.get("current") or {}
     ndvi = ((vegetation.data.get("latest") or {}).get("ndvi") or {}).get("mean")
     anomaly = (rainfall.data.get("anomalies") or {}).get("last_30_days", {}).get("percent_of_normal")
@@ -497,6 +537,28 @@ def _failed_section(key: str, exc: Exception) -> Section:
 # --------------------------------------------------------------------------- #
 # Cache + jobs
 # --------------------------------------------------------------------------- #
+def _inputs_fingerprint(farm: dict[str, Any]) -> str:
+    """Fingerprint the farm-attached inputs that change guidance but not geometry.
+
+    A recorded laboratory test or a new advisory must invalidate a cached
+    analysis; otherwise "record the results here so advice switches to
+    measurements" is false for the whole cache TTL.
+    """
+    tests = farm.get("soil_tests") or []
+    latest = tests[0] if tests else {}
+    advisories = farm.get("advisories") or []
+    return stable_hash(
+        [
+            latest.get("id"),
+            latest.get("sampled_on"),
+            latest.get("ph"),
+            latest.get("soc_gkg"),
+            latest.get("texture_class"),
+            sorted(str(advisory.get("id")) for advisory in advisories),
+        ]
+    )
+
+
 def analysis_key(farm: dict[str, Any], field_id: str | None, crop_id: str | None, planting_date: str | None,
                  management_level: str) -> str:
     day = datetime.now(GH_TZ).date().isoformat()
@@ -512,6 +574,7 @@ def analysis_key(farm: dict[str, Any], field_id: str | None, crop_id: str | None
             planting_date,
             management_level,
             farm.get("irrigation"),
+            _inputs_fingerprint(farm),
             day,
             ANALYSIS_VERSION,
         ]
@@ -535,7 +598,24 @@ def run_and_cache(farm: dict[str, Any], key: str, **kwargs) -> dict[str, Any]:
     return payload
 
 
-def submit_job(farm_id: str, params: dict[str, Any]) -> str:
+def _progress_summary(partial: dict[str, Any]) -> dict[str, Any]:
+    """What a progress write stores: section statuses, not the whole payload.
+
+    The full payload is written once, at completion. Rewriting every section at
+    every step stored hundreds of kilobytes per job per step, and the client only
+    reads the statuses while it waits.
+    """
+    sections = partial.get("sections") or {}
+    return {
+        "partial": True,
+        "sections": {
+            key: {"key": key, "status": section.get("status"), "message": section.get("message")}
+            for key, section in sections.items()
+        },
+    }
+
+
+def submit_job(farm_id: str, params: dict[str, Any], *, force: bool = False) -> str:
     job_id = uuid.uuid4().hex
     job_create(job_id, farm_id, "analysis")
     job_update(job_id, status="running", progress=0.02, message="Queued")
@@ -550,14 +630,16 @@ def submit_job(farm_id: str, params: dict[str, Any]) -> str:
                 params.get("planting_date") or farm.get("planting_date"),
                 params.get("management_level", "medium"),
             )
-            cached = get_cached(key)
+            # `force` must survive into the job body: checking the cache here
+            # regardless of force made the UI's refresh a no-op.
+            cached = None if force else get_cached(key)
             if cached:
                 job_update(job_id, status="complete", progress=1.0, message="Loaded from cache", result=cached)
                 return
 
             def progress(value: float, message: str, partial: dict[str, Any] | None) -> None:
                 if partial:
-                    job_update(job_id, progress=round(value, 3), message=message, result=partial)
+                    job_update(job_id, progress=round(value, 3), message=message, result=_progress_summary(partial))
                 else:
                     job_update(job_id, progress=round(value, 3), message=message)
 

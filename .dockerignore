@@ -13,6 +13,7 @@ frontend/.vite
 **/*.pyc
 .pytest_cache
 .venv
+.venv-lock
 venv
 
 # Runtime data and caches (never bake farms, chips or caches into the image)

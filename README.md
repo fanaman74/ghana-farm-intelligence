@@ -48,7 +48,7 @@ Requirements: Python 3.12+, Node 20+.
 ```bash
 # backend
 python -m venv .venv && . .venv/Scripts/activate     # Windows: .venv\Scripts\activate
-pip install -r backend/requirements.txt
+pip install -r backend/requirements.txt              # or backend/requirements.lock to reproduce exactly
 cd backend && uvicorn app.main:app --host 0.0.0.0 --port 8000
 
 # frontend (second terminal)
@@ -178,7 +178,11 @@ GET  /api/docs                        OpenAPI UI
 ```
 
 Administrator routes (`/api/admin/*`, `/api/market-prices`) require `X-Admin-Token` when
-`GFI_ADMIN_TOKEN` is set.
+`GFI_ADMIN_TOKEN` is set. Set `GFI_ACCESS_TOKEN` to gate the private API behind one shared secret, or —
+for real accounts — set `GFI_ADMIN_USER` and `GFI_ADMIN_PASSWORD` once to create the first administrator,
+who then creates every other account (with an administrator flag) in **Settings → Accounts**. Each account
+sees only the farms it created; administrators see all of them. With no accounts and no token, a deployment
+is open, which is the documented local default.
 
 ### Stale interface after an update
 
@@ -189,11 +193,11 @@ pushing source changes does not update a running image.
 
 ## Tests
 ```bash
-# deterministic unit tests (no network)
-cd backend && python -m pytest tests/test_core.py -q      # 23 passed
+# deterministic unit + API tests (no network): 32 unit + 15 API
+cd backend && python -m pytest tests -q                   # 47 passed, 11 live skipped
 
 # live provider integration tests (network)
-GFI_LIVE_TESTS=1 python -m pytest tests/test_providers_live.py -q   # 10 passed
+GFI_LIVE_TESTS=1 python -m pytest tests/test_providers_live.py -q   # 11 passed
 # southern + northern farms against SoilGrids, Open-Meteo, CHIRPS, Sentinel-2, DEM;
 # includes a 30-year CHIRPS climatology vs raw COG cross-check and a WaPOR
 # "must report unavailable, never fake a value" assertion.
@@ -203,12 +207,20 @@ cd frontend && npm ci && npx playwright install chromium
 GFI_BASE_URL=http://127.0.0.1:8000 npx playwright test --project=desktop
 # 8 passed: onboarding, real analysis + provenance + tabs, draw/save/GeoJSON/PDF,
 # evidence layers rendered on demand, satellite basemap, locality search, offline reload, mobile viewport
+GFI_BASE_URL=http://127.0.0.1:8000 npx playwright test --project=android
+# the same 8 passing at a Pixel 5 viewport; the suite is re-runnable against an
+# existing database (it selects the sample farm explicitly rather than whatever
+# farm happens to be first)
 ```
 
 Verification run on 31 October 2026: **23 unit + 11 live + 8 browser tests passed**;
 `scripts/verify_providers.py` reported 8 of 9 endpoints reachable, with WaPOR returning HTTP 502
 (shown as unavailable in the app). Screenshots used above were captured by
 `frontend/tests/e2e/flow.mjs` against the real providers.
+
+`.github/workflows/ci.yml` runs the unit + API suite, a production-settings import check, and a
+clean `tsc` + `vite build` on every push. The browser suite is not part of CI: it needs a running
+server and live provider access.
 
 ## Repository layout
 

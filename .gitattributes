@@ -1,0 +1,4 @@
+# Keep shell scripts and the Dockerfile LF-only: a CRLF shebang makes the
+# container fail to start with "bad interpreter: /bin/sh^M".
+*.sh text eol=lf
+Dockerfile text eol=lf

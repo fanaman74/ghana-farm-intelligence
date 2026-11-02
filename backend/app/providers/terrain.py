@@ -40,8 +40,8 @@ def _tiles(geom) -> list[tuple[int, int]]:
     return tiles
 
 
-def mosaic(geom) -> tuple[np.ndarray, Any, float, float]:
-    """Return (elevation array, affine transform, centre lat, centre lon)."""
+def mosaic(geom) -> tuple[np.ndarray, Any, float, float, dict[str, int]]:
+    """Return (elevation array, affine transform, centre lat, centre lon, info)."""
     west, south, east, north = geom.bounds
     # Snap the output grid to the global 1 arc-second pixel grid.
     out_west = math.floor(west / RES) * RES
@@ -56,8 +56,9 @@ def mosaic(geom) -> tuple[np.ndarray, Any, float, float]:
     from rasterio.transform import from_origin
 
     transform = from_origin(out_west, out_north, RES, RES)
+    tiles = _tiles(geom)
     errors = 0
-    for lat_floor, lon_floor in _tiles(geom):
+    for lat_floor, lon_floor in tiles:
         try:
             with open_raster(remote_cog(dem_url(lat_floor, lon_floor)), GDAL_HTTP_TIMEOUT="60") as ds:
                 from rasterio.windows import from_bounds
@@ -68,6 +69,11 @@ def mosaic(geom) -> tuple[np.ndarray, Any, float, float]:
                     transform=ds.transform,
                 )
                 data = ds.read(1, window=window)
+                nodata = ds.nodata
+                if nodata is not None:
+                    # The DEM's void/sea sentinel is not an elevation. Without this
+                    # it becomes a real value and corrupts the slope gradient.
+                    data = np.where(data == nodata, np.nan, data)
         except Exception as exc:  # noqa: BLE001
             errors += 1
             _ = exc
@@ -87,12 +93,9 @@ def mosaic(geom) -> tuple[np.ndarray, Any, float, float]:
         ]
     if np.isnan(mosaic_array).all():
         raise ProviderError("copernicus_dem", "no_tiles", "No Copernicus DEM tile could be read for this area")
-    if errors:
-        # Partial coverage is acceptable; the mask below only uses valid pixels.
-        pass
     centre_lat = (south + north) / 2
     centre_lon = (west + east) / 2
-    return mosaic_array, transform, centre_lat, centre_lon
+    return mosaic_array, transform, centre_lat, centre_lon, {"requested": len(tiles), "failed": errors}
 
 
 def _ground_pixel_size(lat: float, lon: float) -> tuple[float, float]:
@@ -131,12 +134,24 @@ def _stats(values: np.ndarray, valid: np.ndarray, weights: np.ndarray) -> dict[s
 
 def analyse(geom, *, annual_rainfall_mm: float | None = None) -> Section:
     geom = ensure_shapely(geom)
-    elevation, transform, centre_lat, centre_lon = mosaic(geom)
+    elevation, transform, centre_lat, centre_lon, dem_info = mosaic(geom)
     mask = _polygon_mask(geom, transform, elevation.shape)
     finite = np.isfinite(elevation)
     valid = mask & finite
     if not valid.any():
         raise ProviderError("copernicus_dem", "all_nodata", "The DEM window contains no valid elevation inside this field")
+    pixels_in_polygon = int(mask.sum()) or 1
+    coverage = float(valid.sum() / pixels_in_polygon)
+    warnings: list[str] = []
+    if dem_info.get("failed"):
+        warnings.append(
+            f"{dem_info['failed']} of {dem_info['requested']} Copernicus DEM tile(s) could not be read; "
+            "elevation and slope describe only the part of the boundary that loaded."
+        )
+    if coverage < 0.95:
+        warnings.append(
+            f"Only {coverage * 100:.0f}% of this boundary has valid elevation data; slope statistics exclude the rest."
+        )
 
     dx, dy = _ground_pixel_size(centre_lat, centre_lon)
     # Slope in percent from the 3x3 gradient, edge-safe.
@@ -192,6 +207,8 @@ def analyse(geom, *, annual_rainfall_mm: float | None = None) -> Section:
             },
             "pixel_size_m": [round(dx, 1), round(dy, 1)],
             "resolution": describe_resolution_deg(RES, RES, centre_lat),
+            "dem_coverage_fraction": round(coverage, 4),
+            "tiles": dem_info,
             "source_kind": "derived_from_dem",
             "notes": [
                 "30 m elevation cannot resolve field drainage or waterlogging.",
@@ -212,6 +229,7 @@ def analyse(geom, *, annual_rainfall_mm: float | None = None) -> Section:
                 key_required=False,
             )
         ],
+        warnings=warnings,
         retrieved_at=iso_now(),
     )
 

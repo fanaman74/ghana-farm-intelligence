@@ -5,10 +5,22 @@ from __future__ import annotations
 from fastapi import APIRouter, HTTPException, Query, Response
 
 from .. import analysis as analysis_service
+from .. import auth
 from ..geo import layer_render
 from ..providers import sentinel2
 
 router = APIRouter()
+
+
+def _load_visible_farm(farm_id: str):
+    """Load a farm, reporting another account's boundary as missing."""
+    try:
+        farm = analysis_service.load_farm(farm_id)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail="Farm not found") from exc
+    if not auth.can_see_farm(farm.get("owner_id")):
+        raise HTTPException(status_code=404, detail="Farm not found")
+    return farm
 
 
 @router.get("/farms/{farm_id}/layers/{layer_id}")
@@ -23,7 +35,7 @@ def farm_layer(
     layer never belongs to a different boundary.
     """
     try:
-        farm = analysis_service.load_farm(farm_id)
+        farm = _load_visible_farm(farm_id)
     except KeyError as exc:
         raise HTTPException(status_code=404, detail="Farm not found") from exc
     # Accept both URL-friendly (soil-ph) and canonical (soil_ph) ids.
@@ -60,7 +72,7 @@ def farm_satellite(
 ) -> dict:
     """A real Sentinel-2 true-colour basemap around the farm (10 m, latest clear scene)."""
     try:
-        farm = analysis_service.load_farm(farm_id)
+        farm = _load_visible_farm(farm_id)
     except KeyError as exc:
         raise HTTPException(status_code=404, detail="Farm not found") from exc
     try:

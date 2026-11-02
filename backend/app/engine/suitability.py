@@ -20,6 +20,12 @@ WEIGHTS = {
     "temperature": 0.15,
     "slope": 0.10,
 }
+# Weights are relative, so the intended total is their sum (0.90), not 1.0.
+WEIGHT_TOTAL = sum(WEIGHTS.values())
+# Confidence needs the evidence, not just a count of components: "high" allows a
+# missing slope (0.889 of the weight) but never a missing water component (0.667).
+HIGH_CONFIDENCE_COVERAGE = 0.85
+MEDIUM_CONFIDENCE_COVERAGE = 0.60
 
 CATEGORY_BANDS = [
     (75.0, "highly_suitable", "Highly suitable"),
@@ -232,6 +238,10 @@ def evaluate_crop(crop: dict[str, Any], context: dict[str, Any]) -> dict[str, An
 
     available = [component for component in components if component["available"]]
     weight_total = sum(component["weight"] for component in available)
+    # Share of the intended evidence that actually arrived. Missing components are
+    # never worth more than present ones: the mean is computed over what arrived,
+    # but confidence and ranking are discounted by the share that did not.
+    data_coverage = round(weight_total / WEIGHT_TOTAL, 3) if WEIGHT_TOTAL else 0.0
     score = (
         round(sum(component["score"] * component["weight"] for component in available) / weight_total, 1)
         if weight_total > 0
@@ -241,9 +251,13 @@ def evaluate_crop(crop: dict[str, Any], context: dict[str, Any]) -> dict[str, An
     soil_valid = soil.get("valid_fraction")
     confidence = "low"
     if score is not None:
-        if len(available) >= 4 and (soil_valid is None or soil_valid >= 0.5):
+        if (
+            len(available) >= 4
+            and data_coverage >= HIGH_CONFIDENCE_COVERAGE
+            and (soil_valid is None or soil_valid >= 0.5)
+        ):
             confidence = "high"
-        elif len(available) >= 3:
+        elif len(available) >= 3 and data_coverage >= MEDIUM_CONFIDENCE_COVERAGE:
             confidence = "medium"
     if soil_valid is not None and soil_valid < 0.35:
         confidence = "low"
@@ -293,6 +307,12 @@ def evaluate_crop(crop: dict[str, Any], context: dict[str, Any]) -> dict[str, An
         if score is not None
         else None
     )
+    # Ranking uses the score discounted by missing evidence, so a crop that only
+    # scored well because a limiting measurement was absent does not outrank one
+    # scored on complete data. The displayed score stays the observed mean.
+    rank_score = (
+        round(score * (0.5 + 0.5 * data_coverage), 1) if score is not None else None
+    )
 
     return {
         "id": crop["id"],
@@ -312,6 +332,8 @@ def evaluate_crop(crop: dict[str, Any], context: dict[str, Any]) -> dict[str, An
             else None
         ),
         "score": score,
+        "data_coverage": data_coverage,
+        "rank_score": rank_score,
         "confidence": confidence,
         "components": components,
         "deciding_factors": [
@@ -346,7 +368,7 @@ def evaluate_crop(crop: dict[str, Any], context: dict[str, Any]) -> dict[str, An
 def rank_crops(context: dict[str, Any], *, limit: int = 3) -> dict[str, Any]:
     evaluations = [evaluate_crop(crop, context) for crop in crop_kb.all_crops()]
     scored = [item for item in evaluations if item["category"] not in ("insufficient_data",)]
-    scored.sort(key=lambda item: (item["score"] or 0, item["confidence"] == "high"), reverse=True)
+    scored.sort(key=lambda item: (item["rank_score"] or 0, item["confidence"] == "high"), reverse=True)
     insufficient = [item["name"] for item in evaluations if item["category"] == "insufficient_data"]
 
     missing = set()
@@ -368,7 +390,8 @@ def rank_crops(context: dict[str, Any], *, limit: int = 3) -> dict[str, Any]:
             "note": (
                 "Suitability is screening, not a yield forecast. It combines published crop ranges with "
                 "SoilGrids, CHIRPS climatology, ERA5 temperature normals and Copernicus terrain. "
-                "No GAEZ raster is queried in this release."
+                "No GAEZ raster is queried in this release. Crops are ranked by the score discounted by "
+                "missing evidence (rank_score); confidence needs at least 85% of the component weight."
             ),
         },
     }

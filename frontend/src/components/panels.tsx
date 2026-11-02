@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import {
   api,
   formatDate,
@@ -7,12 +7,14 @@ import {
   relativeAge,
 } from "../api";
 import type {
+  AccountUser,
   Analysis,
   CropEvaluation,
   CropSummary,
   Farm,
   Job,
   LayerState,
+  PlaceResult,
   Recommendation,
   Source,
   CropComponent,
@@ -601,13 +603,13 @@ function TabOverview({
         <Metric label="Area" value={formatNumber(info.area_ha, 2)} unit="ha" hint={`${formatNumber(info.area_ha * 2.471, 1)} acres`} />
         <Metric label="Perimeter" value={formatNumber(info.perimeter_m, 0)} unit="m" hint={`${info.vertex_count} vertices`} />
         <Metric label="Annual rainfall" value={info.annual_rainfall_mm ? formatNumber(info.annual_rainfall_mm, 0) : "—"} unit="mm" hint="1991–2020 CHIRPS" />
-        <Metric label="Soil pH (0–30 cm)" value={soil?.modelled?.profile_0_30?.phh2o?.value ? formatNumber(soil.modelled.profile_0_30.phh2o.value, 2) : "—"} hint={soil?.modelled?.acidity_class ?? "estimate"} />
+        <Metric label="Soil pH (0–30 cm)" value={soil?.modelled?.profile_0_30?.phh2o?.value != null ? formatNumber(soil.modelled.profile_0_30.phh2o.value, 2) : "—"} hint={soil?.modelled?.acidity_class ?? "estimate"} />
         <Metric
           label="Latest NDVI"
           value={vegetation?.latest?.ndvi?.mean !== undefined && vegetation?.latest?.ndvi?.mean !== null ? formatNumber(vegetation.latest.ndvi.mean, 2) : "—"}
           hint={vegetation?.latest?.date ? `Sentinel-2 ${formatShortDate(vegetation.latest.date)}` : "no usable scene"}
         />
-        <Metric label="Slope" value={terrain?.slope_percent ? formatNumber(terrain.slope_percent.mean, 1) : "—"} unit="%" hint={terrain?.erosion_screening?.level ? `${terrain.erosion_screening.level} erosion screening` : undefined} />
+        <Metric label="Slope" value={terrain?.slope_percent?.mean != null ? formatNumber(terrain.slope_percent.mean, 1) : "—"} unit="%" hint={terrain?.erosion_screening?.level ? `${terrain.erosion_screening.level} erosion screening` : undefined} />
       </MetricsGrid>
 
       <div className="coverage-strip">
@@ -792,7 +794,7 @@ function TabSoil({ analysis, onAddSoilTest }: { analysis: Analysis | null; onAdd
               <p className="small">{section?.data.precedence}</p>
               <div className="measured-values">
                 {measured.ph !== null && measured.ph !== undefined ? <span>pH <strong>{formatNumber(Number(measured.ph), 2)}</strong></span> : null}
-                {measured.soc_gkg ? <span>SOC <strong>{formatNumber(Number(measured.soc_gkg), 1)}</strong> g/kg</span> : null}
+                {measured.soc_gkg != null ? <span>SOC <strong>{formatNumber(Number(measured.soc_gkg), 1)}</strong> g/kg</span> : null}
                 {measured.total_n_gkg ? <span>N <strong>{formatNumber(Number(measured.total_n_gkg), 2)}</strong> g/kg</span> : null}
                 {measured.p_mgkg ? <span>P <strong>{formatNumber(Number(measured.p_mgkg), 1)}</strong> mg/kg</span> : null}
                 {measured.texture_class ? <span><strong>{String(measured.texture_class)}</strong></span> : null}
@@ -832,18 +834,20 @@ function TabSoil({ analysis, onAddSoilTest }: { analysis: Analysis | null; onAdd
                   </div>
                   <div className="ph-interval__track" aria-hidden="true">
                     <span className="ph-interval__band" />
-                    <span
-                      className="ph-interval__marker"
-                      style={{
-                        left: `${Math.min(
-                          98,
-                          Math.max(
-                            2,
-                            ((modelled.profile_0_30.phh2o?.value ?? 6) - 3) / 8 * 100,
-                          ),
-                        )}%`,
-                      }}
-                    />
+                    {modelled.profile_0_30.phh2o?.value != null ? (
+                      <span
+                        className="ph-interval__marker"
+                        style={{
+                          left: `${Math.min(
+                            98,
+                            Math.max(
+                              2,
+                              ((modelled.profile_0_30.phh2o.value) - 3) / 8 * 100,
+                            ),
+                          )}%`,
+                        }}
+                      />
+                    ) : null}
                   </div>
                   <div className="ph-interval__scale tiny muted">
                     <span>pH 3</span><span>5.5</span><span>7</span><span>11</span>
@@ -1061,18 +1065,23 @@ function TabWeather({ analysis }: { analysis: Analysis | null }) {
             <h3>10-day outlook</h3>
             <div className="forecast" role="table" aria-label="Daily forecast">
               {forecast.map((day) => {
-                const rain = Number(day.precipitation_mm ?? 0);
+                const rainMm = day.precipitation_mm == null ? null : Number(day.precipitation_mm);
+                const rain = rainMm ?? 0;
+                const tMax = day.temperature_max_c == null ? null : Math.round(Number(day.temperature_max_c));
+                const tMin = day.temperature_min_c == null ? null : Math.round(Number(day.temperature_min_c));
                 return (
                   <div className="forecast__day" key={String(day.date)} role="row">
                     <span className="forecast__date">{formatShortDate(String(day.date))}</span>
-                    <span className="forecast__rain" aria-label={`${rain} mm rain`}>
+                    <span className="forecast__rain" aria-label={rainMm == null ? "no forecast value" : `${rain} mm rain`}>
                       <i style={{ height: `${Math.min(52, 6 + rain * 3)}px` }} />
                     </span>
-                    <span className="forecast__mm numeric">{formatNumber(rain, 1)}</span>
+                    <span className="forecast__mm numeric">{rainMm == null ? "—" : formatNumber(rainMm, 1)}</span>
                     <span className="forecast__temp numeric">
-                      {Math.round(Number(day.temperature_max_c ?? 0))}° / {Math.round(Number(day.temperature_min_c ?? 0))}°
+                      {tMax == null || tMin == null ? "—" : `${tMax}° / ${tMin}°`}
                     </span>
-                    <span className="forecast__prob tiny muted">{day.precipitation_probability ?? "—"}%</span>
+                    <span className="forecast__prob tiny muted">
+                      {day.precipitation_probability == null ? "—" : `${day.precipitation_probability}%`}
+                    </span>
                   </div>
                 );
               })}
@@ -1182,16 +1191,19 @@ function Advisories() {
 /* --------------------------------------------------------------------- crops */
 
 function ComponentBar({ component }: { component: CropComponent }) {
-  const score = component.score ?? 0;
-  const tone = score >= 78 ? "good" : score >= 60 ? "watch" : "danger";
+  const scored = component.available && component.score != null;
+  const score = scored ? Number(component.score) : 0;
+  const tone = scored ? (score >= 78 ? "good" : score >= 60 ? "watch" : "danger") : "unscored";
   return (
     <div className="component">
       <div className="component__head">
         <span>{component.name}</span>
-        <span className={`numeric component__score component__score--${tone}`}>{component.available ? Math.round(score) : "—"}</span>
+        <span className={`numeric component__score component__score--${tone}`}>{scored ? Math.round(score) : "—"}</span>
       </div>
       <div className="component__track">
-        <div className={`component__fill component__fill--${tone}`} style={{ width: `${component.available ? score : 0}%` }} />
+        {scored ? (
+          <div className={`component__fill component__fill--${tone}`} style={{ width: `${score}%` }} />
+        ) : null}
       </div>
       <div className="component__values tiny muted">
         <span>Farm: {component.farm_value ?? "—"}</span>
@@ -1546,7 +1558,13 @@ function TabWater({ analysis }: { analysis: Analysis | null }) {
             label="Balance"
             value={analytics?.next_7_days.water_balance_mm ?? "—"}
             unit="mm"
-            tone={(analytics?.next_7_days.water_balance_mm ?? 0) < -10 ? "danger" : "teal"}
+            tone={
+              analytics?.next_7_days.water_balance_mm == null
+                ? undefined
+                : analytics.next_7_days.water_balance_mm < -10
+                  ? "danger"
+                  : "teal"
+            }
             hint="Rain minus ET₀"
           />
           <Metric label="Soil moisture (0–10 cm)" value={weather?.current.soil_moisture_0_10cm ?? "—"} unit="m³/m³" hint="Model estimate" />
@@ -1584,7 +1602,11 @@ function TabWater({ analysis }: { analysis: Analysis | null }) {
             <MetricsGrid>
               <Metric label="Elevation" value={formatNumber(terrain.data.elevation_m.mean, 0)} unit="m" hint={`${formatNumber(terrain.data.elevation_m.min, 0)}–${formatNumber(terrain.data.elevation_m.max, 0)} m`} />
               <Metric label="Mean slope" value={formatNumber(terrain.data.slope_percent.mean, 1)} unit="%" hint={`${formatNumber(terrain.data.slope_percent.p90, 1)}% at 90th percentile`} />
-              <Metric label="Aspect" value={terrain.data.aspect_label ?? "—"} hint={`${formatNumber(terrain.data.aspect_degrees ?? 0, 0)}°`} />
+              <Metric
+            label="Aspect"
+            value={terrain.data.aspect_label ?? "—"}
+            hint={terrain.data.aspect_degrees == null ? "not available" : `${formatNumber(terrain.data.aspect_degrees, 0)}°`}
+          />
               <Metric
                 label="Erosion screening"
                 value={terrain.data.erosion_screening.level}
@@ -2036,58 +2058,79 @@ export function SearchOverlay({
   onDrawHere: () => void;
 }) {
   const [query, setQuery] = useState("");
-  const [results, setResults] = useState<Array<Record<string, unknown>>>([]);
+  const [results, setResults] = useState<PlaceResult[]>([]);
   const [loading, setLoading] = useState(false);
   const [activeIndex, setActiveIndex] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement | null>(null);
+  const optionId = (index: number) => `place-option-${index}`;
 
   useEffect(() => {
     if (!open) return;
+    const previous = document.activeElement as HTMLElement | null;
     setQuery("");
     setResults([]);
     setError(null);
-    setTimeout(() => inputRef.current?.focus(), 50);
+    setActiveIndex(0);
+    const timer = window.setTimeout(() => inputRef.current?.focus(), 50);
+    return () => {
+      window.clearTimeout(timer);
+      // Give focus back to whatever opened the dialog.
+      previous?.focus?.();
+    };
   }, [open]);
 
   useEffect(() => {
-    if (!open || query.trim().length < 2) {
+    const text = query.trim();
+    if (!open || text.length < 2) {
       setResults([]);
+      setLoading(false);
       return;
     }
+    let cancelled = false;
     const controller = new AbortController();
     setLoading(true);
-    const timer = setTimeout(() => {
-      fetch(`/api/places/search?q=${encodeURIComponent(query)}&limit=12`, { signal: controller.signal })
-        .then((response) => response.json())
+    const timer = window.setTimeout(() => {
+      api
+        .searchPlaces(text, controller.signal)
         .then((payload) => {
+          if (cancelled) return;
           setResults(payload.results ?? []);
           setActiveIndex(0);
+          setError(null);
         })
-        .catch((fetchError) => {
-          if (fetchError.name !== "AbortError") setError("Search failed — check the connection.");
+        .catch((fetchError: unknown) => {
+          if (cancelled || (fetchError as { status?: number } | null)?.status === 499) return;
+          setResults([]);
+          // A failed search is not an empty result set.
+          setError("Search failed — check the connection.");
         })
-        .finally(() => setLoading(false));
+        .finally(() => {
+          // A superseded request must not clear the new request's spinner.
+          if (!cancelled) setLoading(false);
+        });
     }, 180);
     return () => {
+      cancelled = true;
       controller.abort();
-      clearTimeout(timer);
+      window.clearTimeout(timer);
     };
   }, [query, open]);
 
   if (!open) return null;
 
-  const choose = (result: Record<string, unknown>) => {
+  const choose = (result: PlaceResult) => {
+    if (result.lat == null || result.lon == null) return;
     const lat = Number(result.lat);
     const lon = Number(result.lon);
     if (!Number.isFinite(lat) || !Number.isFinite(lon)) return;
     onSelect({
       lat,
       lon,
-      name: String(result.name),
-      region: (result.region as string) ?? null,
-      district: (result.district as string) ?? null,
-      kind: String(result.kind ?? result.type ?? "place"),
+      name: result.name,
+      region: result.region ?? null,
+      district: result.district ?? null,
+      kind: result.kind ?? result.type ?? "place",
     });
     onClose();
   };
@@ -2100,6 +2143,11 @@ export function SearchOverlay({
           <input
             ref={inputRef}
             value={query}
+            role="combobox"
+            aria-expanded={results.length > 0}
+            aria-controls="place-results"
+            aria-autocomplete="list"
+            aria-activedescendant={results.length ? optionId(activeIndex) : undefined}
             onChange={(event) => setQuery(event.target.value)}
             onKeyDown={(event) => {
               if (event.key === "ArrowDown") {
@@ -2109,6 +2157,7 @@ export function SearchOverlay({
                 event.preventDefault();
                 setActiveIndex((index) => Math.max(index - 1, 0));
               } else if (event.key === "Enter" && results[activeIndex]) {
+                event.preventDefault();
                 choose(results[activeIndex]);
               } else if (event.key === "Escape") {
                 onClose();
@@ -2119,29 +2168,28 @@ export function SearchOverlay({
           />
           {loading ? <span className="spinner" aria-hidden="true" /> : <kbd>esc</kbd>}
         </div>
-        <ul className="search-results" role="listbox" aria-label="Search results">
+        <ul className="search-results" id="place-results" role="listbox" aria-label="Search results">
           {results.map((result, index) => (
-            <li key={String(result.id)}>
-              <button
-                type="button"
-                role="option"
-                aria-selected={index === activeIndex}
-                className={`search-result ${index === activeIndex ? "is-active" : ""}`}
-                onMouseEnter={() => setActiveIndex(index)}
-                onClick={() => choose(result)}
-              >
-                <span>
-                  <strong>{String(result.name)}</strong>
-                  <span className="tiny muted">
-                    {[result.type, result.district, result.region].filter(Boolean).join(" · ")}
-                  </span>
+            <li
+              key={result.id}
+              id={optionId(index)}
+              role="option"
+              aria-selected={index === activeIndex}
+              className={`search-result ${index === activeIndex ? "is-active" : ""}`}
+              onMouseEnter={() => setActiveIndex(index)}
+              onClick={() => choose(result)}
+            >
+              <span>
+                <strong>{result.name}</strong>
+                <span className="tiny muted">
+                  {[result.type, result.district, result.region].filter(Boolean).join(" · ")}
                 </span>
-                <span className="tiny muted">{result.lat !== null ? "↗" : "region"}</span>
-              </button>
+              </span>
+              <span className="tiny muted">{result.lat !== null ? "↗" : "region"}</span>
             </li>
           ))}
           {!results.length && !loading ? (
-            <li className="search-empty tiny muted">
+            <li className="search-empty tiny muted" aria-live="polite">
               {query.length < 2 ? "Type at least two letters. Search runs against the local OpenStreetMap Ghana index." : error ?? "No matching localities."}
             </li>
           ) : null}
@@ -2159,6 +2207,157 @@ export function SearchOverlay({
 
 /* ----------------------------------------------------------------- settings */
 
+/* ------------------------------------------------------------- accounts */
+
+function AccountsPanel({ me }: { me: AccountUser | null }) {
+  const [users, setUsers] = useState<AccountUser[]>([]);
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [username, setUsername] = useState("");
+  const [password, setPassword] = useState("");
+  const [isAdmin, setIsAdmin] = useState(false);
+
+  const refresh = useCallback(async () => {
+    try {
+      const payload = await api.listUsers();
+      setUsers(payload.users);
+      setError(null);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Accounts could not be loaded.");
+    }
+  }, []);
+
+  useEffect(() => {
+    void refresh();
+  }, [refresh]);
+
+  const run = async (action: () => Promise<unknown>) => {
+    setBusy(true);
+    try {
+      await action();
+      await refresh();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "That change was not saved.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="stack">
+      {error ? (
+        <div className="banner banner--warn" role="alert">
+          {error}
+        </div>
+      ) : null}
+      <p className="tiny muted">
+        Administrators create accounts, set passwords and decide who else is an administrator. Each account sees
+        only the farms it created; administrators see every farm. Without accounts, the deployment stays open as
+        before.
+      </p>
+
+      <ul className="account-list">
+        {users.map((user) => (
+          <li key={user.id} className="account-row">
+            <span>
+              <strong>{user.username}</strong>
+              <span className="tiny muted">
+                {user.is_admin ? "Administrator" : "Farm owner"} · {user.farm_count ?? 0} farm(s)
+                {me?.id === user.id ? " · you" : ""}
+              </span>
+            </span>
+            <span className="button-row">
+              <button
+                type="button"
+                className="button button--ghost button--small"
+                disabled={busy || me?.id === user.id}
+                onClick={() => void run(() => api.updateUser(user.id, { is_admin: !user.is_admin }))}
+              >
+                {user.is_admin ? "Remove admin" : "Make admin"}
+              </button>
+              <button
+                type="button"
+                className="button button--ghost button--small"
+                disabled={busy}
+                onClick={() => {
+                  const next = window.prompt(`New password for ${user.username} (at least 8 characters)`);
+                  if (next) void run(() => api.updateUser(user.id, { password: next }));
+                }}
+              >
+                Reset password
+              </button>
+              <button
+                type="button"
+                className="button button--ghost button--small"
+                disabled={busy || me?.id === user.id}
+                onClick={() => {
+                  if (window.confirm(`Delete ${user.username}? Their farms stay and become administrator-only.`)) {
+                    void run(() => api.deleteUser(user.id));
+                  }
+                }}
+              >
+                Delete
+              </button>
+            </span>
+          </li>
+        ))}
+      </ul>
+
+      <form
+        className="stack"
+        onSubmit={(event) => {
+          event.preventDefault();
+          void run(async () => {
+            await api.createUser({ username: username.trim(), password, is_admin: isAdmin });
+            setUsername("");
+            setPassword("");
+            setIsAdmin(false);
+          });
+        }}
+      >
+        <h3>Create an account</h3>
+        <div className="form-grid">
+          <Field label="Username" htmlFor="new-account-username">
+            <input
+              id="new-account-username"
+              value={username}
+              onChange={(event) => setUsername(event.target.value)}
+              required
+              minLength={3}
+              maxLength={40}
+              autoComplete="off"
+            />
+          </Field>
+          <Field label="Password" htmlFor="new-account-password" hint="At least 8 characters. Share it directly with the person.">
+            <input
+              id="new-account-password"
+              type="password"
+              value={password}
+              onChange={(event) => setPassword(event.target.value)}
+              required
+              minLength={8}
+              autoComplete="new-password"
+            />
+          </Field>
+        </div>
+        <label className="checkbox-row">
+          <input type="checkbox" checked={isAdmin} onChange={(event) => setIsAdmin(event.target.checked)} />
+          This account is an administrator
+        </label>
+        <div className="button-row button-row--end">
+          <button
+            type="submit"
+            className="button button--primary"
+            disabled={busy || !username.trim() || password.length < 8}
+          >
+            {busy ? "Saving…" : "Create account"}
+          </button>
+        </div>
+      </form>
+    </div>
+  );
+}
+
 export function SettingsModal({
   open,
   onClose,
@@ -2173,6 +2372,8 @@ export function SettingsModal({
   usage,
   onClearOffline,
   onExportAll,
+  me,
+  onSignOut,
 }: {
   open: boolean;
   onClose: () => void;
@@ -2187,15 +2388,22 @@ export function SettingsModal({
   usage: { usedMB: number; quotaMB: number | null } | null;
   onClearOffline: () => void;
   onExportAll: () => void;
+  me: AccountUser | null;
+  onSignOut: () => void;
 }) {
-  const [tab, setTab] = useState<"general" | "sources" | "about">("general");
+  const [tab, setTab] = useState<"general" | "accounts" | "sources" | "about">("general");
   return (
     <Modal open={open} title="Settings and data sources" onClose={onClose} wide>
       <div className="settings-tabs">
         <button type="button" className={tab === "general" ? "is-active" : ""} onClick={() => setTab("general")}>General</button>
+        {me?.is_admin ? (
+          <button type="button" className={tab === "accounts" ? "is-active" : ""} onClick={() => setTab("accounts")}>Accounts</button>
+        ) : null}
         <button type="button" className={tab === "sources" ? "is-active" : ""} onClick={() => setTab("sources")}>Data sources & licences</button>
         <button type="button" className={tab === "about" ? "is-active" : ""} onClick={() => setTab("about")}>About & privacy</button>
       </div>
+
+      {tab === "accounts" && me?.is_admin ? <AccountsPanel me={me} /> : null}
 
       {tab === "general" ? (
         <div className="stack">
@@ -2253,6 +2461,19 @@ export function SettingsModal({
               </button>
             </div>
           </div>
+          {me ? (
+            <div className="callout callout--tight">
+              <h4>Signed in</h4>
+              <p className="small">
+                {me.username} · {me.is_admin ? "administrator" : "farm owner"}
+              </p>
+              <div className="button-row">
+                <button type="button" className="button button--ghost button--small" onClick={onSignOut}>
+                  Sign out
+                </button>
+              </div>
+            </div>
+          ) : null}
           <div className="callout callout--tight">
             <h4>App version</h4>
             <p className="small">
@@ -2398,17 +2619,10 @@ export function SaveFarmModal({
             Cancel
           </button>
           <button
-            type="button"
+            type="submit"
+            form="save-farm-form"
             className="button button--primary"
             disabled={loading || !geometry}
-            onClick={async () => {
-              setLoading(true);
-              try {
-                await onSave({});
-              } finally {
-                setLoading(false);
-              }
-            }}
           >
             {loading ? "Saving…" : "Save and analyse"}
           </button>
@@ -2486,7 +2700,6 @@ export function SaveFarmModal({
           <Field label="Notes" htmlFor="farm-notes">
             <textarea id="farm-notes" name="notes" rows={2} maxLength={2000} placeholder="Variety, land tenure notes, anything you want to remember" />
           </Field>
-          <button type="submit" hidden aria-hidden="true" tabIndex={-1} />
         </form>
         {overlaps.length ? (
           <div className="banner banner--warn">

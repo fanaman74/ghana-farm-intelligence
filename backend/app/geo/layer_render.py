@@ -26,9 +26,9 @@ from shapely.ops import transform as shapely_transform
 
 from ..config import settings
 from ..db import cache_get, cache_put
-from ..geo.geodesy import ensure_shapely
+from ..geo.geodesy import ensure_shapely, polygon_hash
 from ..geo.raster import open_raster, read_polygon, remote_cog
-from ..utils import iso_now, stable_hash
+from ..utils import iso_now
 from ..providers.landcover import CLASSES as LANDCOVER_CLASSES, tile_url as landcover_tile
 from ..providers.soilgrids import PROPERTIES
 from ..providers.soilgrids_layers import open_layer
@@ -297,7 +297,7 @@ def _render_soil(spec: LayerSpec, geom) -> dict[str, Any]:
     factor = max(1, round(spec.resolution_m / 10))
     display_values, display_valid, display_transform = _refine(scaled, valid, rw.transform, geom, factor, rw.crs)
     rgba = _rgba_from_classes(display_values, display_valid, spec.breaks, spec.colours)
-    filename = f"layer_{spec.layer_id}_{stable_hash([round(value, 6) for value in geom.bounds])}.png"
+    filename = f"layer_{spec.layer_id}_{polygon_hash(geom)}.png"
     _save_png(rgba, filename)
     return _result(
         spec,
@@ -334,7 +334,7 @@ def _render_cropland(geom) -> dict[str, Any]:
         {"color": LANDCOVER_CLASSES[code]["color"], "label": LANDCOVER_CLASSES[code]["name"]}
         for code in present
     ]
-    filename = f"layer_cropland_{stable_hash([round(value, 6) for value in geom.bounds])}.png"
+    filename = f"layer_cropland_{polygon_hash(geom)}.png"
     _save_png(rgba, filename)
     spec = LayerSpec(
         layer_id="cropland",
@@ -370,7 +370,7 @@ def _render_cropland(geom) -> dict[str, Any]:
 
 def _render_terrain(geom, layer_id: str) -> dict[str, Any]:
     spec = SLOPE if layer_id == "slope" else ELEVATION
-    elevation, transform, centre_lat, centre_lon = mosaic(geom)
+    elevation, transform, centre_lat, centre_lon, _dem_info = mosaic(geom)
     mask = rasterize(
         [(mapping(geom), 1)],
         out_shape=elevation.shape,
@@ -391,7 +391,7 @@ def _render_terrain(geom, layer_id: str) -> dict[str, Any]:
     factor = max(1, round(spec.resolution_m / 10))
     display_values, display_valid, display_transform = _refine(values, valid, transform, geom, factor, "EPSG:4326")
     rgba = _rgba_from_classes(display_values, display_valid, spec.breaks, spec.colours)
-    filename = f"layer_{spec.layer_id}_{stable_hash([round(value, 6) for value in geom.bounds])}.png"
+    filename = f"layer_{spec.layer_id}_{polygon_hash(geom)}.png"
     _save_png(rgba, filename)
     corners = _corners(display_transform, display_values.shape[1], display_values.shape[0], "EPSG:4326")
     return _result(spec, filename, corners, _legend_for(spec), display_valid, np.where(display_valid, display_values, np.nan))
@@ -416,7 +416,7 @@ def render(layer_id: str, geom) -> dict[str, Any]:
             ),
         }
     geom = ensure_shapely(geom)
-    key = f"layer:{layer_id}:{stable_hash([round(value, 6) for value in geom.bounds])}"
+    key = f"layer:{layer_id}:{polygon_hash(geom)}"
     cached = cache_get(key)
     if cached and not cached["expired"]:
         payload = cached["payload"]

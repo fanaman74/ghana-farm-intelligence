@@ -180,6 +180,28 @@ MIGRATIONS: list[str] = [
     );
     CREATE INDEX IF NOT EXISTS idx_place_name ON place_index(name);
     """,
+    # ---- 2: accounts, sessions and farm ownership -------------------------
+    """
+    CREATE TABLE IF NOT EXISTS users (
+        id              TEXT PRIMARY KEY,
+        username        TEXT NOT NULL UNIQUE COLLATE NOCASE,
+        password_hash   TEXT NOT NULL,
+        is_admin        INTEGER NOT NULL DEFAULT 0,
+        created_at      TEXT NOT NULL,
+        updated_at      TEXT NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS sessions (
+        token_hash      TEXT PRIMARY KEY,
+        user_id         TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        created_at      TEXT NOT NULL,
+        expires_at      TEXT NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_sessions_user ON sessions(user_id);
+
+    ALTER TABLE farms ADD COLUMN owner_id TEXT;
+    CREATE INDEX IF NOT EXISTS idx_farms_owner ON farms(owner_id);
+    """,
 ]
 
 
@@ -307,6 +329,39 @@ def cache_prune(keep_expired_days: int = 45) -> int:
     with get_conn() as conn:
         cur = conn.execute("DELETE FROM provider_cache WHERE expires_at < ?", (cutoff,))
         return cur.rowcount
+
+
+def housekeeping(keep_expired_days: int = 45, keep_finished_jobs_days: int = 30) -> dict[str, int]:
+    """Fail jobs orphaned by a restart and delete expired cache rows.
+
+    Jobs run in-process on a bounded thread pool, so nothing left ``queued`` or
+    ``running`` when the process starts can ever finish; the UI would poll it
+    forever. Called from the application lifespan.
+    """
+    now = datetime.now(timezone.utc)
+    cache_cutoff = (now - __import__("datetime").timedelta(days=keep_expired_days)).isoformat(timespec="seconds")
+    job_cutoff = (now - __import__("datetime").timedelta(days=keep_finished_jobs_days)).isoformat(timespec="seconds")
+    with get_conn() as conn:
+        interrupted = conn.execute(
+            "UPDATE jobs SET status='failed', message='Interrupted by a restart', error='interrupted', updated_at=?"
+            " WHERE status IN ('queued','running')",
+            (_now(),),
+        ).rowcount
+        deleted_jobs = conn.execute(
+            "DELETE FROM jobs WHERE status IN ('complete','failed') AND updated_at < ?", (job_cutoff,)
+        ).rowcount
+        provider_deleted = conn.execute(
+            "DELETE FROM provider_cache WHERE expires_at < ?", (cache_cutoff,)
+        ).rowcount
+        analysis_deleted = conn.execute(
+            "DELETE FROM analysis_cache WHERE expires_at < ?", (cache_cutoff,)
+        ).rowcount
+    return {
+        "interrupted_jobs": interrupted,
+        "deleted_jobs": deleted_jobs,
+        "deleted_provider_cache": provider_deleted,
+        "deleted_analysis_cache": analysis_deleted,
+    }
 
 
 def record_provider_health(provider_id: str, status: str, latency_ms: int | None,

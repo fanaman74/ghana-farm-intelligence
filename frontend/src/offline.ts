@@ -19,9 +19,13 @@ function db(): Promise<IDBPDatabase> {
   return dbPromise;
 }
 
+/** Analyses are cached per boundary scope: a field's result is not the farm's. */
+export function analysisScopeKey(farmId: string, fieldId?: string | null): string {
+  return `${farmId}:${fieldId ?? "farm"}`;
+}
+
 /** Farms, records and computed analyses stay on the device for offline use. */
-export const offline = {
-  async saveFarms(farms: Farm[]) {
+export const offline = {  async saveFarms(farms: Farm[]) {
     const database = await db();
     await database.put("farms", farms, "all");
     await database.put("meta", new Date().toISOString(), "lastFarmsSync");
@@ -32,13 +36,13 @@ export const offline = {
     const savedAt = ((await database.get("meta", "lastFarmsSync")) as string | undefined) ?? null;
     return { farms: farms ?? [], savedAt };
   },
-  async saveAnalysis(farmId: string, analysis: Analysis) {
+  async saveAnalysis(scope: string, analysis: Analysis) {
     const database = await db();
-    await database.put("analyses", { analysis, savedAt: new Date().toISOString() }, farmId);
+    await database.put("analyses", { analysis, savedAt: new Date().toISOString() }, scope);
   },
-  async loadAnalysis(farmId: string): Promise<{ analysis: Analysis; savedAt: string } | null> {
+  async loadAnalysis(scope: string): Promise<{ analysis: Analysis; savedAt: string } | null> {
     const database = await db();
-    const row = (await database.get("analyses", farmId)) as
+    const row = (await database.get("analyses", scope)) as
       | { analysis: Analysis; savedAt: string }
       | undefined;
     return row ?? null;

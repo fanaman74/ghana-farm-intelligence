@@ -15,6 +15,18 @@ async function ensureFarmSelected(page: Page) {
   const sample = page.getByRole("button", { name: /Try the sample farm/i });
   if (await sample.isVisible().catch(() => false)) {
     await sample.click();
+  } else {
+    // Re-runs against an existing database: pick the sample farm explicitly
+    // instead of whichever farm happens to be selected. The suite used to fail
+    // its second run because it inherited the previous run's farms.
+    const select = page.locator(".farm-select");
+    if (await select.isVisible().catch(() => false)) {
+      const option = select.locator("option", { hasText: /Sample farm/i }).first();
+      if (await option.count()) {
+        const value = await option.getAttribute("value");
+        if (value) await select.selectOption(value);
+      }
+    }
   }
   await page.waitForSelector(".farm-summary__area", { timeout: 60_000 });
 }
@@ -22,6 +34,13 @@ async function ensureFarmSelected(page: Page) {
 async function waitForAnalysis(page: Page, timeout = 300_000) {
   await expect(page.locator(".rec, .empty--warn").first()).toBeVisible({ timeout });
   await page.waitForTimeout(1200);
+}
+
+/** The layers panel starts closed on narrow viewports, so open it first. */
+async function openLayers(page: Page) {
+  if (await page.locator(".layer").first().isVisible().catch(() => false)) return;
+  await page.getByRole("button", { name: /Toggle layers panel/i }).click();
+  await expect(page.locator(".layer").first()).toBeVisible({ timeout: 15_000 });
 }
 
 test.describe("Ghana Farm Intelligence", () => {
@@ -77,6 +96,12 @@ test.describe("Ghana Farm Intelligence", () => {
 
     // The timeline range control changes the displayed window.
     await page.locator(".tabs__item", { hasText: "Overview" }).first().click();
+    if ((page.viewportSize()?.width ?? 1440) <= 980) {
+      // On a phone the farm sheet covers the floating timeline, and the app hides
+      // it while the sheet is open. Collapse the sheet first.
+      await page.getByRole("button", { name: /Toggle farm panel/i }).click();
+      await expect(page.locator(".timeline")).toBeVisible({ timeout: 10_000 });
+    }
     await page.locator(".timeline .segmented__item", { hasText: "90 d" }).click();
     await expect(page.locator(".timeline .segmented__item", { hasText: "90 d" })).toHaveAttribute(
       "aria-pressed",
@@ -154,6 +179,7 @@ test.describe("Ghana Farm Intelligence", () => {
     await openApp(page);
     await ensureFarmSelected(page);
     await waitForAnalysis(page, 180_000);
+    await openLayers(page);
 
     // Turn off the analysis imagery so the evidence layer is unambiguous.
     const ndviRow = page.locator(".layer", { hasText: "NDVI" }).first();

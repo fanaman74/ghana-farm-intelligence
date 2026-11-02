@@ -570,3 +570,19 @@ export interface SatelliteChip {
   farm_id?: string;
   geometry_label?: string;
 }
+
+export interface AccountUser {
+  id: string;
+  username: string;
+  is_admin: boolean;
+  created_at: string;
+  updated_at?: string;
+  farm_count?: number;
+}
+
+export interface AuthMe {
+  authenticated: boolean;
+  accounts_enabled: boolean;
+  user: AccountUser | null;
+  posture: "accounts" | "token" | "open";
+}

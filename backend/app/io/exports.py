@@ -133,6 +133,16 @@ def farm_csv(farm: dict[str, Any]) -> str:
 # --------------------------------------------------------------------------- #
 # PDF
 # --------------------------------------------------------------------------- #
+def _xml_escape(text: str) -> str:
+    """Escape ReportLab paragraph markup.
+
+    A farm named "Plot <A>" raised a ValueError and turned PDF export into a 500;
+    ReportLab also honours <img>/<a> markup, so unescaped names reach further than
+    the paragraph they belong to.
+    """
+    return text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+
+
 def _latin1(text: Any) -> str:
     """reportlab's built-in fonts are Latin-1; normalise typography safely."""
     if text is None:
@@ -146,7 +156,7 @@ def _latin1(text: Any) -> str:
     }
     for source, target in replacements.items():
         value = value.replace(source, target)
-    return value.encode("latin-1", "replace").decode("latin-1")
+    return _xml_escape(value.encode("latin-1", "replace").decode("latin-1"))
 
 
 def _num(value: Any, digits: int = 2) -> str:
@@ -373,7 +383,10 @@ def _table(rows: list[list[Any]], style, colors) -> Any:
 
     cell = ParagraphStyle("cell", parent=style, fontSize=7.5, leading=9)
     header = ParagraphStyle("header", parent=cell, textColor=colours.white)
-    data = [[Paragraph(_latin1(value), header if index == 0 else cell) for value in row] for index, row in enumerate(rows)]
+    # Cells arrive already normalised and XML-escaped by _latin1 at their
+    # construction site; escaping again here would render "&amp;amp;".
+    data = [[Paragraph(value if isinstance(value, str) else _latin1(value), header if index == 0 else cell)
+             for value in row] for index, row in enumerate(rows)]
     table = Table(data, repeatRows=1)
     table.setStyle(TableStyle([
         ("BACKGROUND", (0, 0), (-1, 0), colours.HexColor("#1d4d33")),

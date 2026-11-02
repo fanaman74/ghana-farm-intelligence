@@ -21,15 +21,14 @@ from typing import Any
 import numpy as np
 
 from ..db import cache_get, cache_put
-from ..geo.geodesy import ensure_shapely
+from ..geo.geodesy import ensure_shapely, polygon_hash
 from ..geo.raster import (
     describe_resolution,
     read_polygon,
     sub_field_detail_supported,
     summarise,
-    valid_fraction,
 )
-from ..utils import iso_now, round_sig, stable_hash
+from ..utils import iso_now, round_sig
 from .base import ProviderError, Section, Source, STATUS_OK, STATUS_STALE
 from .soilgrids_layers import open_layer
 
@@ -62,31 +61,53 @@ DEPTH_WEIGHT = {"0-5cm": 5.0, "5-15cm": 10.0, "15-30cm": 15.0}
 UNCERTAINTY_DEPTHS = ["0-5cm", "5-15cm", "15-30cm"]
 
 
+def sample_stats(
+    values: np.ndarray,
+    mask: np.ndarray,
+    weights: np.ndarray,
+    spec: dict[str, Any],
+    nodata: float | None,
+) -> dict[str, Any]:
+    """Area-weighted statistics for one layer, restricted to the polygon.
+
+    ``mask`` is the field itself, never its bounding box: the padded window that
+    makes a boundless read safe must not leak neighbouring cells into a field
+    average, which matters most for fields of only a few 250 m cells.
+    SoilGrids marks missing predictions with 0, so a zero counts as "no
+    prediction" rather than as a measured zero.
+    """
+    array = np.asarray(values, dtype="float64")
+    fill = float(nodata) if nodata is not None else -32768.0
+    finite = np.isfinite(array) & (array != fill)
+    zero_is_fill = array == 0
+    scaled = array / spec["scale"]
+    low, high = spec["range"]
+    valid = mask & finite & ~zero_is_fill & (scaled >= low) & (scaled <= high)
+    stats = summarise(scaled, valid, weights, decimals=spec["decimals"])
+    total_area = float(weights[mask].sum())
+    stats["valid_fraction"] = (
+        round(min(1.0, float(weights[valid].sum()) / total_area), 4) if total_area > 0 else 0.0
+    )
+    stats["pixels_in_polygon"] = int(mask.sum())
+    stats["zeros_without_prediction"] = int((mask & zero_is_fill).sum())
+    return stats
+
+
 def _layer_stats(prop: str, depth: str, stat: str, geom) -> tuple[dict[str, Any], str]:
-    """Sample one SoilGrids layer over the polygon, cached per polygon."""
+    """Sample one SoilGrids layer over the polygon, cached per boundary."""
     spec = PROPERTIES[prop]
-    geom_hash = stable_hash([round(v, 6) for v in geom.bounds])
-    cache_key = f"{PROVIDER}:poly:{geom_hash}:{prop}:{depth}:{stat}"
+    cache_key = f"{PROVIDER}:poly:{polygon_hash(geom)}:{prop}:{depth}:{stat}"
     entry = cache_get(cache_key)
     if entry and not entry["expired"]:
         return entry["payload"], "cache"
 
     with open_layer(prop, depth, stat) as dataset:
         rw = read_polygon(dataset, geom)
-    values = rw.data[0]
-    nodata = np.float64(rw.nodata) if rw.nodata is not None else np.float64(-32768)
-    finite = np.isfinite(values) & (values != nodata) & (values != 0)
-    scaled = values / spec["scale"]
-    low, high = spec["range"]
-    valid = finite & (scaled >= low) & (scaled <= high)
-
-    stats = summarise(values, valid, rw.weights, unit_scale=1.0 / spec["scale"], decimals=spec["decimals"])
-    stats["valid_fraction"] = round(valid_fraction(rw, valid), 4)
+    stats = sample_stats(rw.data[0], rw.mask, rw.weights, spec, rw.nodata)
     stats["resolution"] = describe_resolution(rw)
     stats["sub_field_detail"] = sub_field_detail_supported(rw.polygon_area_m2, rw.pixel_area_m2)
     stats["coverage_fraction"] = round(rw.coverage_fraction, 4)
     stats["unit"] = spec["unit"]
-    stats["pixels_in_polygon"] = int(rw.mask.sum())
     stats["pixel_area_ha"] = round(rw.pixel_area_m2 / 10_000, 3)
     stats["single_grid_cell"] = stats["pixels_in_polygon"] <= 1
     cache_put(cache_key, PROVIDER, stats, 365 * 24 * 3600)
@@ -94,7 +115,12 @@ def _layer_stats(prop: str, depth: str, stat: str, geom) -> tuple[dict[str, Any]
 
 
 def usda_texture_class(sand: float | None, clay: float | None, silt: float | None) -> str | None:
-    """Approximate USDA texture class from estimated mass fractions (12 classes)."""
+    """Approximate USDA texture class from estimated mass fractions (12 classes).
+
+    Returns ``None`` when the composition matches no class: inventing a class
+    ("Loam" was the old fallback) would award a favourable texture score to a
+    soil nobody described.
+    """
     if None in (sand, clay, silt):
         return None
     total = float(sand) + float(clay) + float(silt)
@@ -125,7 +151,7 @@ def usda_texture_class(sand: float | None, clay: float | None, silt: float | Non
         return "Loamy sand"
     if s >= 43 and c < 20 and si < 50:
         return "Sandy loam"
-    return "Loam"
+    return None
 
 
 def _acidity_class(ph: float) -> str:
@@ -296,6 +322,9 @@ def analyse(geom, *, include_uncertainty: bool = True) -> Section:
         "SoilGrids values are model predictions at 250 m, not measurements from your field.",
         "A local soil test is required before lime or fertiliser prescriptions.",
         "Total nitrogen is an estimate of soil nitrogen, not a fertiliser recommendation.",
+        "Cells where SoilGrids returns 0 are treated as 'no prediction', never as a measured zero "
+        "(this matters for coarse fragments, where 0 % is physically possible but indistinguishable "
+        "from the product's missing-value convention).",
     ]
 
     if results["coverage"]["single_grid_cell"]:

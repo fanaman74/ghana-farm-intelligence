@@ -39,6 +39,16 @@ def health() -> dict[str, Any]:
         "network_access": settings.allow_network,
         "data_dir": str(settings.data_dir),
         "seed_available": (SEED_DIR / "ghana_places.json.gz").exists(),
+        # Stated, not implied: the deployment posture is part of the contract.
+        "auth": {
+            "farm_data": "access_token" if settings.access_token else "open",
+            "access_token_required": bool(settings.access_token),
+            "admin_token_required": bool(settings.admin_token),
+            "note": (
+                "Farm boundaries are private to whoever holds the access token. With no token set they "
+                "are readable and deletable by any client that can reach this service."
+            ),
+        },
     }
 
 

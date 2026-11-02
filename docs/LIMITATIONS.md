@@ -55,9 +55,28 @@ a licensed agronomist, a cadastre or a yield model.
 
 - **SQLite and in-process jobs** mean the deployment should run **one replica**. Horizontal scaling requires
   moving the database to Postgres and jobs to an external queue.
+- **Accounts are optional and administrator-created.** Set `GFI_ADMIN_USER` and `GFI_ADMIN_PASSWORD` once to
+  create the first administrator; that account then creates every other account in Settings → Accounts
+  and decides who else is an administrator. Each account sees only the farms it created; administrators
+  see all farms. There is no self-signup, no email, no password-reset-by-email, and no per-farm sharing
+  between two non-administrator accounts yet. With no accounts and no `GFI_ACCESS_TOKEN`, every boundary
+  is readable and deletable by any client that can reach the API.
 - The **administrator API is unauthenticated when `GFI_ADMIN_TOKEN` is empty**. Set the token for any
   public deployment.
+- The container **runs the app as an unprivileged user** (uid 10001, `gfi`). Because platform volumes
+  usually arrive root-owned, `docker/entrypoint.sh` fixes ownership of `GFI_DATA_DIR` while it is still
+  root and then drops privileges; if the volume cannot be chowned the entrypoint says so and the app
+  will fail to write. Override the uid/gid with `GFI_APP_UID` / `GFI_APP_GID` if the volume is mounted
+  for another owner.
 - Provider rate limits apply (see each licence). Caching is per deployment; there is no shared CDN.
+- **A partial provider record is labelled, not hidden.** If a CHIRPS raster in a 7/30/90-day window is
+  missing, the window reports `complete: false` with its covered and expected day counts, the anomaly
+  is compared against the same number of baseline days, and the label says the record is partial. A
+  soil or rainfall value is never borrowed from a neighbouring cell.
+- **A very large boundary is refused rather than analysed.** Storage accepts up to 50,000 ha, but an
+  analysis above `GFI_MAX_ANALYSIS_HA` (default 20,000 ha, about 2 M pixels per Sentinel-2 band) fails
+  with `area_too_large_for_analysis` and an explanation, instead of exhausting memory and timing out.
+  Split large boundaries into fields.
 - The sample farm is a real location analysed with real data, but it is **not a real farm**; it is labelled
   as a sample.
 - The **interface is English**. Twi, Ewe and Dagbani are selectable in settings but intentionally fall back

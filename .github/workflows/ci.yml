@@ -1,0 +1,166 @@
+name: CI
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  backend:
+    name: Backend (Python 3.12)
+    runs-on: ubuntu-latest
+    env:
+      # Tests write SQLite/cache here, never into the checkout.
+      GFI_DATA_DIR: ${{ runner.temp }}/gfi-data
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: backend/requirements*.txt
+
+      - name: Install dependencies
+        run: pip install -r backend/requirements-dev.txt
+
+      - name: Unit and API tests (network provider tests self-skip)
+        run: python -m pytest backend/tests -q
+
+      - name: Verify the app imports with production settings
+        env:
+          GFI_ENV: production
+        run: python -c "import app.main; print('import ok')"
+        working-directory: backend
+
+  backend-lock:
+    name: Backend lockfile (Python 3.12)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: backend/requirements.lock
+
+      # The lock is what ships in the image; this job proves the pinned set still
+      # resolves and imports on the deployment interpreter.
+      - name: Install the pinned set
+        run: pip install -r backend/requirements.lock
+
+      - name: Import check
+        run: python -c "import app.main; print('lock import ok')"
+        working-directory: backend
+
+  docker:
+    name: Docker image + browser acceptance
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Build the image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: false
+          load: true
+          tags: gfi:ci
+
+      # Proves the image is runnable, that the PWA is inside it, and that the app
+      # process is not root. No token here: the browser suite needs an open
+      # deployment (the gate is checked separately below).
+      - name: Start and smoke-test
+        run: |
+          set -euo pipefail
+          docker run -d --name gfi -p 8000:8000 -e GFI_ENV=production gfi:ci
+
+          for i in $(seq 1 45); do
+            if curl -fsS http://127.0.0.1:8000/api/health -o health.json 2>/dev/null; then break; fi
+            sleep 2
+          done
+          cat health.json
+          python3 -c "import json; d=json.load(open('health.json')); assert d['status']=='ok', d"
+          python3 -c "import json; d=json.load(open('health.json')); assert d['auth']['farm_data']=='open', d"
+
+          test "$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:8000/api/farms)" = "200"
+          curl -fsS http://127.0.0.1:8000/ | grep -q 'id="root"'
+
+          # PID 1 must not be root. Checking only pid 1 avoids racing the
+          # healthcheck, which runs as root by design.
+          pid1_user=$(docker top gfi -o user,pid | awk '$2 == 1 {print $1}')
+          echo "pid 1 user: ${pid1_user:-unknown}"
+          test -n "$pid1_user"
+          test "$pid1_user" != "root"
+
+      # A second container, because the gate must be exercised with a token set.
+      - name: Access token gates the private API
+        run: |
+          set -euo pipefail
+          docker run -d --name gfi-token -p 8001:8000 \
+            -e GFI_ENV=production -e GFI_ACCESS_TOKEN=ci-token gfi:ci
+          for i in $(seq 1 45); do
+            if curl -fsS http://127.0.0.1:8001/api/health -o /dev/null 2>/dev/null; then break; fi
+            sleep 2
+          done
+          test "$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:8001/api/farms)" = "401"
+          test "$(curl -s -o /dev/null -w '%{http_code}' -H 'X-Access-Token: ci-token' http://127.0.0.1:8001/api/farms)" = "200"
+          test "$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:8001/api/health)" = "200"
+          docker rm -f gfi-token
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install Playwright
+        working-directory: frontend
+        run: |
+          npm ci --no-audit --no-fund
+          npx playwright install --with-deps chromium
+
+      # The same 16 tests verified locally in round 8, now against the real image.
+      - name: Acceptance tests (desktop + mobile)
+        working-directory: frontend
+        env:
+          GFI_BASE_URL: http://127.0.0.1:8000
+        run: npx playwright test --timeout=180000
+
+      - name: Container logs on failure
+        if: failure()
+        run: docker logs gfi || true
+
+  frontend:
+    name: Frontend (Node 22)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci --no-audit --no-fund
+
+      - name: Typecheck (clean, ignoring the committed buildinfo)
+        run: npx tsc -b --force
+
+      - name: Production build
+        run: npx vite build

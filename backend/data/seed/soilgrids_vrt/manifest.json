@@ -248,13 +248,13 @@
  "scale_factors": {
   "phh2o": 10.0,
   "soc": 10.0,
-  "nitrogen": 10.0,
+  "nitrogen": 100.0,
   "clay": 10.0,
   "sand": 10.0,
   "silt": 10.0,
   "cec": 10.0,
   "bdod": 100.0,
-  "cfvo": 10.0
+  "cfvo": 100.0
  },
  "example_source": "https://files.isric.org/soilgrids/latest/data/phh2o/phh2o_0-5cm_mean.vrt",
  "notes": [

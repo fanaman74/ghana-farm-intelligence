@@ -186,10 +186,18 @@ def build_recommendations(context: dict[str, Any]) -> dict[str, Any]:
         daily = (rainfall.get("data") or {}).get("daily_series") or []
         last14 = [row["mm"] for row in daily[-14:] if row.get("mm") is not None]
         rain14 = round(sum(last14), 1) if last14 else None
-        forecast5 = round(
-            sum((row.get("precipitation_mm") or 0) for row in ((weather.get("data") or {}).get("daily") or [])[:5]), 1
-        )
-        if window and window.get("state") == "open" and rain14 is not None:
+        # Open-Meteo is requested with past_days=5, so the daily series begins in
+        # the past. Slice from today before summing, or "forecast in the next 5
+        # days" is really the previous five days.
+        today_iso = today.isoformat()
+        forecast_days = [
+            row
+            for row in ((weather.get("data") or {}).get("daily") or [])
+            if str(row.get("date") or "") >= today_iso
+        ]
+        forecast_known = len(forecast_days) >= 3
+        forecast5 = round(sum((row.get("precipitation_mm") or 0) for row in forecast_days[:5]), 1)
+        if window and window.get("state") == "open" and rain14 is not None and forecast_known:
             if rain14 >= 20 and forecast5 >= 5:
                 recommendations.append(
                     _recommendation(
@@ -206,7 +214,7 @@ def build_recommendations(context: dict[str, Any]) -> dict[str, Any]:
                         severity="good",
                         priority=1,
                         evidence=[
-                            _evidence("Rain, last 14 days", f"{rain14:g} mm", "chirps"),
+                            _evidence("Rain, last 14 available days", f"{rain14:g} mm", "chirps"),
                             _evidence("Rain forecast, next 5 days", f"{forecast5:g} mm", "openmeteo_forecast"),
                             _evidence("Planting window", window.get("planting_window", {}).get("label"), "ghana_crop_reference"),
                             _evidence("Historical daily data through", (rainfall.get("data") or {}).get("latest_available"), "chirps"),
@@ -228,7 +236,7 @@ def build_recommendations(context: dict[str, Any]) -> dict[str, Any]:
                         severity="warning",
                         priority=1,
                         evidence=[
-                            _evidence("Rain, last 14 days", f"{rain14:g} mm", "chirps"),
+                            _evidence("Rain, last 14 available days", f"{rain14:g} mm", "chirps"),
                             _evidence("Rain forecast, next 5 days", f"{forecast5:g} mm", "openmeteo_forecast"),
                             _evidence("Latest CHIRPS day", (rainfall.get("data") or {}).get("latest_available"), "chirps"),
                         ],

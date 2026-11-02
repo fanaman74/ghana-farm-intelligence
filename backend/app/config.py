@@ -8,14 +8,30 @@ from __future__ import annotations
 
 import os
 from dataclasses import dataclass
+from datetime import timezone, tzinfo
 from pathlib import Path
-from zoneinfo import ZoneInfo
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 APP_NAME = "Ghana Farm Intelligence"
 APP_SLUG = "ghana-farm-intelligence"
 VERSION = "1.0.0"
 
-GH_TZ = ZoneInfo("Africa/Accra")
+
+def _ghana_timezone() -> tzinfo:
+    """Africa/Accra, with a correct fallback.
+
+    Windows has no IANA database unless the ``tzdata`` package is installed, and
+    a missing database must not stop the app importing. ``ZoneInfo("UTC")`` is no
+    help there either — it reads the same absent database — so the fallback is
+    ``timezone.utc``. Accra is UTC+0 with no daylight saving: the same clock.
+    """
+    try:
+        return ZoneInfo("Africa/Accra")
+    except ZoneInfoNotFoundError:  # pragma: no cover - depends on the host
+        return timezone.utc
+
+
+GH_TZ = _ghana_timezone()
 
 # Ghana national extent. Used for input validation and the default map view.
 GHANA_BOUNDS = {
@@ -64,13 +80,20 @@ class Settings:
     cache_dir: Path
     cors_origins: tuple[str, ...]
     admin_token: str
+    access_token: str
+    admin_user: str
+    admin_password: str
+    session_ttl_s: int
+    cookie_secure: bool
     provider_timeout_s: float
     provider_retries: int
     allow_network: bool
     allow_demo_data: bool
     min_area_ha: float
     max_area_ha: float
+    max_analysis_ha: float
     job_workers: int
+    analysis_timeout_s: int
     analysis_cache_ttl_s: int
     weather_cache_ttl_s: int
     soil_cache_ttl_s: int
@@ -108,13 +131,29 @@ def _load_settings() -> Settings:
         cache_dir=data_dir / "cache",
         cors_origins=origins,
         admin_token=os.environ.get("GFI_ADMIN_TOKEN", ""),
+        # One shared secret that gates the private API. Not per-user accounts: it
+        # keeps a public URL from being world-readable, and stays off by default
+        # so a laptop deployment needs no configuration.
+        access_token=os.environ.get("GFI_ACCESS_TOKEN", ""),
+        # First administrator for the accounts feature (see app/auth.py).
+        admin_user=os.environ.get("GFI_ADMIN_USER", ""),
+        admin_password=os.environ.get("GFI_ADMIN_PASSWORD", ""),
+        session_ttl_s=_int("GFI_SESSION_TTL", 14 * 24 * 3600),
+        # Set GFI_COOKIE_SECURE=1 when the app is served over HTTPS.
+        cookie_secure=_bool("GFI_COOKIE_SECURE", False),
         provider_timeout_s=_float("GFI_PROVIDER_TIMEOUT", 45.0),
         provider_retries=_int("GFI_PROVIDER_RETRIES", 2),
         allow_network=_bool("GFI_ALLOW_NETWORK", True),
         allow_demo_data=_bool("GFI_ALLOW_DEMO_DATA", True),
         min_area_ha=_float("GFI_MIN_AREA_HA", 0.005),
         max_area_ha=_float("GFI_MAX_AREA_HA", 50_000.0),
+        # A stored boundary may be large; reading it at 10 m is a different matter.
+        # 20,000 ha is ~2 M pixels per Sentinel band.
+        max_analysis_ha=_float("GFI_MAX_ANALYSIS_HA", 20_000.0),
         job_workers=_int("GFI_JOB_WORKERS", 3),
+        # A job that exceeds this fails with a message instead of holding a worker
+        # (and the UI's progress bar) indefinitely.
+        analysis_timeout_s=_int("GFI_ANALYSIS_TIMEOUT", 300),
         analysis_cache_ttl_s=_int("GFI_ANALYSIS_CACHE_TTL", 3 * 3600),
         weather_cache_ttl_s=_int("GFI_WEATHER_CACHE_TTL", 30 * 60),
         soil_cache_ttl_s=_int("GFI_SOIL_CACHE_TTL", 30 * 24 * 3600),

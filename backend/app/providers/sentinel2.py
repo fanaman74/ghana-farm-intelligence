@@ -19,7 +19,7 @@ from shapely.geometry import box
 
 from ..config import GH_TZ, settings
 from ..db import cache_get, cache_put
-from ..geo.geodesy import ensure_shapely
+from ..geo.geodesy import ensure_shapely, polygon_hash
 from ..geo.raster import (
     align_to_grid,
     colour_array,
@@ -33,7 +33,7 @@ from ..geo.raster import (
     true_colour,
     valid_fraction,
 )
-from ..utils import iso_now, stable_hash
+from ..utils import iso_now
 from .base import ProviderError, Section, Source, STATUS_OK, cached, request
 from .registry import provider_map  # noqa: F401  (kept for registry symmetry)
 
@@ -124,7 +124,7 @@ def _aligned(band_window, reference) -> np.ndarray:
 
 
 def _cloud_free(scene: dict[str, Any], geom) -> dict[str, Any]:
-    geom_hash = stable_hash([round(v, 6) for v in geom.bounds])
+    geom_hash = polygon_hash(geom)
     cache_key = f"{PROVIDER}:scl:{scene['id']}:{geom_hash}"
     entry = cache_get(cache_key)
     if entry and not entry["expired"]:
@@ -239,7 +239,7 @@ def _scene_result(scene: dict[str, Any], geom, *, full: bool) -> dict[str, Any]:
 
         chip_dir = settings.cache_dir / "chips"
         chip_dir.mkdir(parents=True, exist_ok=True)
-        base = f"{scene['id']}_{stable_hash([round(v, 5) for v in geom.bounds])}"
+        base = f"{scene['id']}_{polygon_hash(geom)}"
         paths = {
             "true_color": chip_dir / f"{base}_truecolour.png",
             "ndvi": chip_dir / f"{base}_ndvi.png",
@@ -477,7 +477,7 @@ def context_image(geom, *, buffer_m: int = 1500, max_size: int = 640) -> dict[st
                 scaled = np.clip((image[..., channel] - low) / (high - low), 0, 1)
                 rgba[..., channel] = (scaled * 255).astype("uint8")
             rgba[..., 3] = 255
-        filename = f"satellite_{stable_hash([round(value, 6) for value in context.bounds])}.jpg"
+        filename = f"satellite_{polygon_hash(context)}.jpg"
         from PIL import Image
 
         (settings.cache_dir / "chips").mkdir(parents=True, exist_ok=True)

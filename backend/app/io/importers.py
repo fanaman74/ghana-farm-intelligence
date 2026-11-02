@@ -3,7 +3,11 @@
 from __future__ import annotations
 
 import json
-import xml.etree.ElementTree as ET
+
+# defusedxml: ElementTree is vulnerable to entity-expansion ("billion laughs")
+# attacks, and these files arrive from the public internet.
+from defusedxml import ElementTree as ET
+from defusedxml.common import DefusedXmlException
 from typing import Any
 
 from ..geo.geodesy import GeometryError, normalise_geometry
@@ -40,7 +44,7 @@ def parse_geojson(text: str) -> tuple[dict[str, Any], list[str], str | None]:
 def parse_kml(text: str) -> tuple[dict[str, Any], list[str], str | None]:
     try:
         root = ET.fromstring(text)
-    except ET.ParseError as exc:
+    except (ET.ParseError, DefusedXmlException) as exc:
         raise GeometryError("invalid_kml", f"This KML file could not be read: {exc}") from exc
 
     def local(tag: str) -> str:
@@ -70,6 +74,9 @@ def parse_kml(text: str) -> tuple[dict[str, Any], list[str], str | None]:
     geometry: dict[str, Any] | None = None
     if polygons:
         outer = max(polygons, key=len)
+        if len(polygons) > 1:
+            # Say so rather than silently importing a fraction of the file.
+            warnings.append(f"only_largest_of_{len(polygons)}_kml_polygons_imported")
         if outer[0] != outer[-1]:
             outer.append(outer[0])
             warnings.append("ring_closed_from_kml")
@@ -104,7 +111,7 @@ def _parse_coordinate_string(text: str) -> list[list[float]]:
 def parse_gpx(text: str) -> tuple[dict[str, Any], list[str], str | None]:
     try:
         root = ET.fromstring(text)
-    except ET.ParseError as exc:
+    except (ET.ParseError, DefusedXmlException) as exc:
         raise GeometryError("invalid_gpx", f"This GPX file could not be read: {exc}") from exc
     points: list[list[float]] = []
     label = None

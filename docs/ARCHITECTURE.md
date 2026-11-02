@@ -126,8 +126,12 @@ so the map and the panel cannot drift apart.
    - **sequential:** rainfall (monthly/daily CHIRPS windows), Sentinel-2 (scene search, SCL cloud
      ranking, band reads, chips), WaPOR probe;
    - crop suitability + calendar + recommendations;
-4. Progress and **partial sections** are written to the job row, so the UI can render tabs as they
-   arrive instead of waiting for the slowest provider.
+4. Progress and a **compact per-section status summary** are written to the job row; the full payload is
+   written once, at completion. (The client currently renders progress and the job message; the section
+   summaries are available to the API but not drawn.) A job that runs past `GFI_ANALYSIS_TIMEOUT`
+   (default 300 s) fails with `analysis_timeout` rather than holding a worker indefinitely, and an
+   analysis above `GFI_MAX_ANALYSIS_HA` (default 20,000 ha) is refused up front — the raster read is
+   the expensive part, not storage.
 5. The payload is cached in `analysis_cache` and the job stores the final result.
 
 ## Data model (SQLite)
@@ -164,6 +168,13 @@ Migrations are a forward-only list keyed on `PRAGMA user_version` (`backend/app/
 - Security headers: `X-Content-Type-Options`, `Referrer-Policy`, `X-Frame-Options`,
   `Permissions-Policy` (geolocation only), `Cache-Control: no-store` on `/api`.
 - Admin writes require `X-Admin-Token` when `GFI_ADMIN_TOKEN` is set.
+- **Accounts (optional).** An administrator (bootstrapped from `GFI_ADMIN_USER` / `GFI_ADMIN_PASSWORD`)
+  creates named accounts with passwords and an administrator flag in Settings → Accounts. Passwords are
+  PBKDF2-SHA256 with a per-account salt; a successful login sets an HttpOnly `gfi_session` cookie whose
+  SHA-256 hash is stored with an expiry. Farms carry `owner_id`: a non-administrator sees and edits only
+  their own, an administrator sees all, and an unowned row (created before accounts existed) is
+  administrator-only. A farm the caller may not see answers 404, not 403. With no accounts the private API
+  is protected by `GFI_ACCESS_TOKEN` if set, and open otherwise; `GET /api/auth/me` reports the posture.
 - No trackers, no analytics, no third-party scripts. The map attribution is a DOM control.
 - Boundaries and coordinates are private: stored in SQLite/IndexedDB, exported only on request, and never
   sent to a provider (providers receive only a bounding box / centroid grid cell).

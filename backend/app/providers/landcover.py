@@ -5,18 +5,34 @@ WorldCover is a 2021 baseline, never presented as current crop identification.
 
 from __future__ import annotations
 
+import logging
 import math
 from typing import Any
 
 import numpy as np
+import rasterio
+from rasterio.enums import Resampling
+from rasterio.features import rasterize
+from rasterio.merge import merge as merge_tiles
+from shapely.geometry import mapping
 
 from ..geo.geodesy import ensure_shapely
-from ..geo.raster import describe_resolution_deg, open_raster, read_polygon, remote_cog, categorical_fractions
+from ..geo.raster import (
+    categorical_fractions,
+    describe_resolution_deg,
+    gdal_env,
+    pixel_weights,
+    remote_cog,
+)
 from ..utils import iso_now
 from .base import ProviderError, Section, Source, STATUS_OK
 
 PROVIDER = "esa_worldcover"
 BASE = "https://esa-worldcover.s3.eu-central-1.amazonaws.com/v200/2021/map"
+# WorldCover v200 tiles are 3 deg x 3 deg at 1/12000 deg per pixel (~10 m).
+RES_DEG = 1 / 12000
+
+log = logging.getLogger(__name__)
 
 CLASSES = {
     10: {"name": "Tree cover", "color": "#1a6b3c"},
@@ -45,38 +61,55 @@ def tile_url(lat: float, lon: float) -> str:
 def analyse(geom) -> Section:
     geom = ensure_shapely(geom)
     west, south, east, north = geom.bounds
-    urls = {tile_url(lat, lon) for lat in {math.floor(south), math.floor(north)} for lon in {math.floor(west), math.floor(east)}}
-    valid = None
-    weights = None
-    values = None
-    transform = None
-    crs = None
-    pixels = 0
+    urls = sorted(
+        {
+            tile_url(lat, lon)
+            for lat in {math.floor(south), math.floor(north)}
+            for lon in {math.floor(west), math.floor(east)}
+        }
+    )
 
-    for url in urls:
-        try:
-            with open_raster(remote_cog(url), GDAL_HTTP_TIMEOUT="60") as ds:
-                rw = read_polygon(ds, geom)
-        except Exception:
-            continue
-        if valid is None:
-            values = rw.data[0]
-            valid = rw.mask.copy()
-            weights = rw.weights
-            transform = rw.transform
-            crs = rw.crs
-            pixels = int(rw.mask.sum())
-        else:
-            values = np.where(valid, values, rw.data[0])
-            valid = valid | rw.mask
-            weights = np.where(valid, weights, rw.weights)
+    # Ghana is cut by the 0 degree meridian and by 6/9 N, so a field can span two
+    # or more WorldCover tiles. Mosaic them onto one grid: reading each tile into
+    # its own window and keeping the first non-empty one silently discarded the
+    # classes from every other tile.
+    datasets: list[rasterio.DatasetReader] = []
+    try:
+        with gdal_env(GDAL_HTTP_TIMEOUT="60"):
+            for url in urls:
+                try:
+                    datasets.append(rasterio.open(remote_cog(url)))
+                except Exception as exc:  # noqa: BLE001 - a missing tile is reported below
+                    log.warning("WorldCover tile %s unreadable: %s", url, exc)
+            if not datasets:
+                raise ProviderError(PROVIDER, "no_tile", "No ESA WorldCover tile could be read for this area")
+            mosaic, transform = merge_tiles(
+                datasets,
+                bounds=(west, south, east, north),
+                res=RES_DEG,
+                nodata=0,
+                dtype="uint8",
+                resampling=Resampling.nearest,
+            )
+    finally:
+        for dataset in datasets:
+            dataset.close()
 
-    if valid is None or not valid.any():
-        raise ProviderError(PROVIDER, "no_tile", "No ESA WorldCover tile could be read for this area")
+    values = mosaic[0].astype("int64")
+    mask = rasterize(
+        [(mapping(geom), 1)],
+        out_shape=values.shape,
+        transform=transform,
+        fill=0,
+        all_touched=False,
+        dtype="uint8",
+    ).astype(bool)
+    weights = pixel_weights(transform, values.shape, True)
+    class_valid = mask & np.isin(values, list(CLASSES))
+    if not class_valid.any():
+        raise ProviderError(PROVIDER, "no_classes", "No classified WorldCover pixel inside this boundary")
 
-    class_values = values.astype("int64")
-    class_valid = valid & np.isin(class_values, list(CLASSES))
-    fractions = categorical_fractions(class_values, class_valid, weights)
+    fractions = categorical_fractions(values, class_valid, weights)
     breakdown = [
         {
             "code": int(code),
@@ -88,8 +121,9 @@ def analyse(geom) -> Section:
     ]
     crop_share = fractions.get("40", 0.0)
     tree_share = fractions.get("10", 0.0)
+    classified_fraction = round(float(class_valid.sum() / max(int(mask.sum()), 1)), 4)
 
-    resolution = describe_resolution_deg(0.0000833333, 0.0000833333, (south + north) / 2)
+    resolution = describe_resolution_deg(RES_DEG, RES_DEG, (south + north) / 2)
 
     return Section(
         key="landcover",
@@ -102,11 +136,15 @@ def analyse(geom) -> Section:
             "year": 2021,
             "is_historical_baseline": True,
             "resolution": resolution,
-            "pixels": pixels,
+            "pixels": int(class_valid.sum()),
+            "classified_fraction": classified_fraction,
+            "tiles": {"requested": len(urls), "read": len(datasets)},
             "source_kind": "satellite_classification_2021",
             "notes": [
                 "WorldCover 2021 is a historical baseline, not today's crop identification.",
                 "Cropland includes fallow and mixed systems; it says nothing about the current crop.",
+                "Shares are area-weighted over the classified part of the boundary; "
+                f"{classified_fraction * 100:.0f}% of the boundary carried a WorldCover class.",
             ],
         },
         sources=[
@@ -117,7 +155,7 @@ def analyse(geom) -> Section:
                 licence="CC BY 4.0 — © ESA WorldCover project 2021 / Contains modified Copernicus Sentinel data (2021)",
                 resolution="10 m",
                 period="2021 (historical baseline)",
-                method="3°×3° COG window read; polygon mask; area-weighted class fractions",
+                method="3°×3° COG tiles mosaicked to one grid; polygon mask; area-weighted class fractions",
                 limitations="A 2021 baseline. The field may have changed; this is not a current crop map.",
                 access_method="AWS Open Data COGs (no key)",
                 key_required=False,

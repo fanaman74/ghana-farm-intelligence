@@ -1,6 +1,7 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { api, ApiError, pollJob, relativeAge } from "./api";
+﻿import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { api, ApiError, downloadExport, getAccessToken, pollJob, relativeAge, setAccessToken } from "./api";
 import type {
+  AccountUser,
   Analysis,
   CropSummary,
   Farm,
@@ -24,7 +25,7 @@ import {
   type TabId,
 } from "./components/panels";
 import { Toast } from "./components/ui";
-import { offline } from "./offline";
+import { analysisScopeKey, offline } from "./offline";
 import type { LanguageCode } from "./i18n";
 
 type Theme = "dark" | "daylight";
@@ -48,7 +49,7 @@ const DEFAULT_LAYERS: LayerState[] = [
     opacity: 0.85,
     kind: "vector",
     available: true,
-    description: "geoBoundaries ADM2 — 260 districts.",
+    description: "geoBoundaries ADM2 â€” 260 districts.",
   },
   {
     id: "roads",
@@ -124,7 +125,7 @@ const DEFAULT_LAYERS: LayerState[] = [
     opacity: 0.75,
     kind: "derived",
     available: true,
-    description: "Toggle to render this field's 250 m SoilGrids cells. Each cell is 250 m — blocky by design.",
+    description: "Toggle to render this field's 250 m SoilGrids cells. Each cell is 250 m â€” blocky by design.",
   },
   {
     id: "soil-carbon",
@@ -133,7 +134,7 @@ const DEFAULT_LAYERS: LayerState[] = [
     opacity: 0.75,
     kind: "derived",
     available: true,
-    description: "Toggle to render this field's 250 m SoilGrids cells (0–5 cm).",
+    description: "Toggle to render this field's 250 m SoilGrids cells (0â€“5 cm).",
   },
   {
     id: "soil-texture",
@@ -251,6 +252,14 @@ export default function App() {
   const [catalogBusy, setCatalogBusy] = useState(false);
   const [sampleError, setSampleError] = useState<string | null>(null);
   const [mapNotice, setMapNotice] = useState<string | null>(null);
+  const [gateOpen, setGateOpen] = useState(false);
+  const [gateToken, setGateToken] = useState("");
+  const [accountsEnabled, setAccountsEnabled] = useState(false);
+  const [authUser, setAuthUser] = useState<AccountUser | null>(null);
+  const [loginName, setLoginName] = useState("");
+  const [loginPassword, setLoginPassword] = useState("");
+  const [loginBusy, setLoginBusy] = useState(false);
+  const [loginError, setLoginError] = useState<string | null>(null);
 
   const mapRef = useRef<MapApi | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
@@ -258,6 +267,11 @@ export default function App() {
   const analysisAbort = useRef<AbortController | null>(null);
   const toastTimer = useRef<number | null>(null);
   const runAnalysisRef = useRef<((options?: { force?: boolean; cropId?: string | null; farmOverride?: Farm }) => Promise<void>) | null>(null);
+  // Monotonic tokens: a late response for a previous farm, field or run must
+  // never be written into the state of whatever is selected now.
+  const selectionToken = useRef(0);
+  const analysisRun = useRef(0);
+  const layerEpoch = useRef(0);
 
   const notify = useCallback((message: string, tone: "info" | "success" | "error" = "info") => {
     setToast({ message, tone });
@@ -281,6 +295,38 @@ export default function App() {
     return () => {
       window.removeEventListener("online", handleOnline);
       window.removeEventListener("offline", handleOffline);
+    };
+  }, []);
+
+  // A deployment can require one shared access token. Ask for it up front when
+  // the server says so, and whenever any request comes back 401. Accounts take
+  // precedence: when they exist, signing in is what the 401 means.
+  useEffect(() => {
+    const onUnauthorized = () => {
+      void api
+        .authMe()
+        .then((payload) => {
+          if (payload.accounts_enabled) setAuthUser(null);
+          else setGateOpen(true);
+        })
+        .catch(() => setGateOpen(true));
+    };
+    window.addEventListener("gfi:unauthorized", onUnauthorized);
+    let cancelled = false;
+    api
+      .authMe()
+      .then((payload) => {
+        if (cancelled) return;
+        setAccountsEnabled(payload.accounts_enabled);
+        setAuthUser(payload.user);
+        if (payload.posture === "token" && !getAccessToken()) setGateOpen(true);
+      })
+      .catch(() => {
+        /* offline: the normal offline path applies */
+      });
+    return () => {
+      cancelled = true;
+      window.removeEventListener("gfi:unauthorized", onUnauthorized);
     };
   }, []);
 
@@ -365,6 +411,7 @@ export default function App() {
 
   const selectFarm = useCallback(
     async (farmId: string) => {
+      const token = ++selectionToken.current;
       setSelectedFarmId(farmId);
       setMode("idle");
       setActiveFieldId(null);
@@ -376,10 +423,12 @@ export default function App() {
       setLayersOpen(window.innerWidth > 980);
       try {
         const payload = await api.getFarm(farmId);
+        if (selectionToken.current !== token) return; // a newer selection won
         setFarm(payload.farm);
         setOnline(true);
         void runAnalysisRef.current?.({ farmOverride: payload.farm });
       } catch {
+        if (selectionToken.current !== token) return;
         const fallback = farms.find((item) => item.id === farmId) ?? null;
         setFarm(fallback);
         if (fallback) mapRef.current?.fitFarm(fallback.geometry);
@@ -399,10 +448,13 @@ export default function App() {
   useEffect(() => {
     if (!selectedFarmId) return;
     let cancelled = false;
+    const farmScope = analysisScopeKey(selectedFarmId, null);
     (async () => {
       try {
-        const saved = await offline.loadAnalysis(selectedFarmId);
-        if (!cancelled && saved) {
+        const saved = await offline.loadAnalysis(farmScope);
+        // Only a whole-farm result may stand in for the farm: a field's analysis
+        // describes a smaller boundary and would misstate every area metric.
+        if (!cancelled && saved && (saved.analysis.farm?.field_id ?? null) === null) {
           setAnalysis((current) => current ?? saved.analysis);
           setAnalysisSavedAt(saved.savedAt);
         }
@@ -414,7 +466,10 @@ export default function App() {
         if (!cancelled && latest.analysis) {
           setAnalysis((current) => current ?? latest.analysis);
           setAnalysisSavedAt(latest.analysis.generated_at);
-          void offline.saveAnalysis(selectedFarmId, latest.analysis);
+          void offline.saveAnalysis(
+            analysisScopeKey(selectedFarmId, latest.analysis.farm?.field_id ?? null),
+            latest.analysis,
+          );
         }
       } catch {
         /* offline: cached analysis is used */
@@ -431,6 +486,9 @@ export default function App() {
       const target = options.farmOverride ?? farm;
       if (!target) return;
       const fieldId = options.fieldId ?? activeFieldId ?? null;
+      const scope = analysisScopeKey(target.id, fieldId);
+      const runId = ++analysisRun.current;
+      const superseded = () => analysisRun.current !== runId;
       analysisAbort.current?.abort();
       const controller = new AbortController();
       analysisAbort.current = controller;
@@ -442,17 +500,22 @@ export default function App() {
       setAnalysisSavedAt(null);
       setTab((current) => (current === "crops" ? "crops" : "overview"));
       try {
-        const response = await api.startAnalysis(target.id, {
-          crop_id: options.cropId ?? target.crop_id ?? null,
-          planting_date: target.planting_date ?? null,
-          management_level: "medium",
-          field_id: fieldId,
-          force: options.force ?? false,
-        });
+        const response = await api.startAnalysis(
+          target.id,
+          {
+            crop_id: options.cropId ?? target.crop_id ?? null,
+            planting_date: target.planting_date ?? null,
+            management_level: "medium",
+            field_id: fieldId,
+            force: options.force ?? false,
+          },
+          controller.signal,
+        );
+        if (superseded()) return;
         if (response.cached && response.analysis) {
           setAnalysis(response.analysis);
           setAnalysisSavedAt(response.analysis.generated_at);
-          void offline.saveAnalysis(target.id, response.analysis);
+          void offline.saveAnalysis(scope, response.analysis);
           notify("Loaded a recent analysis for this boundary.", "info");
           return;
         }
@@ -460,6 +523,7 @@ export default function App() {
         const finished = await pollJob(
           response.job_id,
           (update) => {
+            if (superseded()) return;
             setJob(update);
             if (update.result && "partial" in (update.result as object)) {
               setPartial((update.result as { sections: Analysis["sections"] }).sections);
@@ -467,22 +531,27 @@ export default function App() {
           },
           { signal: controller.signal },
         );
+        if (superseded()) return;
         if (finished.status === "complete" && finished.result && !("partial" in (finished.result as object))) {
           const payload = finished.result as Analysis;
           setAnalysis(payload);
           setAnalysisSavedAt(payload.generated_at);
-          void offline.saveAnalysis(target.id, payload);
-          notify("Analysis complete — every value shows its source and date.", "success");
+          void offline.saveAnalysis(scope, payload);
+          notify("Analysis complete â€” every value shows its source and date.", "success");
         } else if (finished.status === "failed") {
           notify(finished.error ?? finished.message ?? "Analysis failed", "error");
         }
       } catch (error) {
-        if ((error as ApiError).status === 499) return;
+        if (superseded() || (error as ApiError).status === 499) return;
         notify(error instanceof Error ? error.message : "Analysis failed", "error");
         setOnline(false);
       } finally {
-        setBusy(false);
-        setJob(null);
+        // Only the run that is still current may clear the progress state; an
+        // aborted run's cleanup used to wipe the new run's spinner.
+        if (!superseded()) {
+          setBusy(false);
+          setJob(null);
+        }
       }
     },
     [farm, notify, activeFieldId],
@@ -518,11 +587,20 @@ export default function App() {
 
   const beginEdit = useCallback(() => {
     if (!farm) return;
+    if (farm.geometry.type !== "Polygon") {
+      // loadGeometry keeps only the first ring, so editing a multi-part boundary
+      // would silently delete every other part on save.
+      notify(
+        "This boundary has several parts. Editing works on single-part boundaries â€” redraw it, or split it into fields instead.",
+        "error",
+      );
+      return;
+    }
     setMode("edit");
     mapRef.current?.loadGeometry(farm.geometry);
     setPanelOpen(false);
     setMapNotice("Drag any vertex to move it, then save the changes.");
-  }, [farm]);
+  }, [farm, notify]);
 
   const beginSplit = useCallback(() => {
     if (!farm) return;
@@ -591,7 +669,10 @@ export default function App() {
             stats: { areaHa: draft.stats?.areaHa ?? 0, perimeterM: draft.stats?.perimeterM ?? 0, vertices: vertexCount },
           });
           setPendingGeometry(geometry);
-          setSaveError("Saved offline — the boundary will be validated by the server when you reconnect.");
+          setSaveError(
+            "No connection â€” this boundary has NOT been saved. Reconnect, then press â€œSave and analyseâ€. " +
+              "Closing this dialog discards it.",
+          );
           setSaveOpen(true);
           return;
         }
@@ -658,7 +739,7 @@ export default function App() {
       setFarm(refreshed.farm);
       await refreshFarms();
       endMode();
-      notify("Boundary updated — re-running the analysis.", "success");
+      notify("Boundary updated â€” re-running the analysis.", "success");
       void runAnalysis({ force: true, farmOverride: refreshed.farm });
     } catch (error) {
       notify(error instanceof Error ? error.message : "Could not update the boundary", "error");
@@ -693,7 +774,10 @@ export default function App() {
 
   const handleDelete = useCallback(async () => {
     if (!farm) return;
-    if (!window.confirm(`Delete “${farm.name}” and all its records? This cannot be undone.`)) return;
+    if (!window.confirm(`Delete â€œ${farm.name}â€ and all its records? This cannot be undone.`)) return;
+    // Stop polling before the farm disappears, or the poll resurrects its panel.
+    analysisAbort.current?.abort();
+    analysisRun.current += 1;
     try {
       await api.deleteFarm(farm.id);
       setFarm(null);
@@ -738,7 +822,7 @@ export default function App() {
       const response = await api.createSample();
       await refreshFarms();
       await selectFarm(response.farm.id);
-      notify("Sample boundary created — it uses real sourced data.", "success");
+      notify("Sample boundary created â€” it uses real sourced data.", "success");
     } catch (error) {
       const message = error instanceof Error ? error.message : "Could not create the sample farm";
       setSampleError(message);
@@ -784,7 +868,7 @@ export default function App() {
       await api.addSoilTest(farm.id, payload);
       const refreshed = await api.getFarm(farm.id);
       setFarm(refreshed.farm);
-      notify("Soil test recorded — guidance now uses the measured value.", "success");
+      notify("Soil test recorded â€” guidance now uses the measured value.", "success");
       void runAnalysis({ force: true, farmOverride: refreshed.farm });
     },
     [farm, notify, runAnalysis],
@@ -802,13 +886,26 @@ export default function App() {
   );
 
   const handleExport = useCallback(
-    (format: "geojson" | "kml" | "csv" | "pdf") => {
+    async (format: "geojson" | "kml" | "csv" | "pdf") => {
       if (!farm) return;
       if (format === "pdf" && !analysis) {
         notify("Run an analysis before exporting a PDF report.", "error");
         return;
       }
-      window.open(api.exportUrl(farm.id, format), "_blank", "noopener,noreferrer");
+      try {
+        const blob = await downloadExport(farm.id, format);
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        link.href = url;
+        link.download = `${(farm.name || "farm").replace(/[^\w.-]+/g, "_")}.${format}`;
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        // Revoking in the same tick cancels the download in some browsers.
+        window.setTimeout(() => URL.revokeObjectURL(url), 0);
+      } catch (error) {
+        notify(error instanceof Error ? error.message : "The export failed.", "error");
+      }
     },
     [farm, analysis, notify],
   );
@@ -820,18 +917,24 @@ export default function App() {
     const link = document.createElement("a");
     link.href = url;
     link.download = "ghana-farm-intelligence-farms.json";
+    document.body.appendChild(link);
     link.click();
-    URL.revokeObjectURL(url);
+    link.remove();
+    window.setTimeout(() => URL.revokeObjectURL(url), 0);
   }, [farms]);
 
   const ensureLayer = useCallback(
     async (layerId: string) => {
       if (!farm || !EVIDENCE_LAYER_IDS.has(layerId)) return;
       if (layerChips[layerId] || layerRequests.current.has(layerId)) return;
+      const epoch = layerEpoch.current;
       layerRequests.current.add(layerId);
       setLayers((current) => current.map((layer) => (layer.id === layerId ? { ...layer, loading: true } : layer)));
       try {
         const chip = await api.farmLayer(farm.id, layerId, activeFieldId);
+        // The farm or field may have changed while this was in flight; a stale
+        // chip would paint one boundary's raster over another.
+        if (layerEpoch.current !== epoch) return;
         if (chip.available && chip.url && chip.corners) {
           setLayerChips((current) => ({ ...current, [layerId]: chip }));
           setLayers((current) =>
@@ -912,6 +1015,8 @@ export default function App() {
   );
 
   useEffect(() => {
+    // Any in-flight layer request now belongs to a boundary nobody is looking at.
+    layerEpoch.current += 1;
     setLayerChips({});
     layerRequests.current.clear();
     setLayers((current) =>
@@ -1015,6 +1120,104 @@ export default function App() {
     return list;
   }, [analysis, layerChips, layers]);
 
+  const signOut = useCallback(async () => {
+    try {
+      await api.logout();
+    } finally {
+      window.location.reload();
+    }
+  }, []);
+
+  if (accountsEnabled && !authUser) {
+    return (
+      <div className="gate">
+        <form
+          className="gate__card"
+          onSubmit={async (event) => {
+            event.preventDefault();
+            setLoginBusy(true);
+            setLoginError(null);
+            try {
+              await api.login(loginName.trim(), loginPassword);
+              setLoginPassword("");
+              window.location.reload();
+            } catch (error) {
+              setLoginError(error instanceof Error ? error.message : "Sign-in failed.");
+              setLoginBusy(false);
+            }
+          }}
+        >
+          <h1>Ghana Farm Intelligence</h1>
+          <p>Sign in with the account an administrator created for you.</p>
+          {loginError ? (
+            <div className="banner banner--warn" role="alert">
+              {loginError}
+            </div>
+          ) : null}
+          <input
+            value={loginName}
+            onChange={(event) => setLoginName(event.target.value)}
+            placeholder="Username"
+            aria-label="Username"
+            autoComplete="username"
+            autoFocus
+            required
+          />
+          <input
+            type="password"
+            value={loginPassword}
+            onChange={(event) => setLoginPassword(event.target.value)}
+            placeholder="Password"
+            aria-label="Password"
+            autoComplete="current-password"
+            required
+          />
+          <button
+            type="submit"
+            className="button button--primary"
+            disabled={loginBusy || !loginName.trim() || !loginPassword}
+          >
+            {loginBusy ? "Signing inâ€¦" : "Sign in"}
+          </button>
+          <p className="tiny muted">Accounts are created by an administrator. There is no self-signup.</p>
+        </form>
+      </div>
+    );
+  }
+
+  if (gateOpen) {
+    return (
+      <div className="gate">
+        <form
+          className="gate__card"
+          onSubmit={(event) => {
+            event.preventDefault();
+            setAccessToken(gateToken.trim());
+            window.location.reload();
+          }}
+        >
+          <h1>Ghana Farm Intelligence</h1>
+          <p>This deployment is protected. Enter its access token to continue.</p>
+          <input
+            type="password"
+            autoFocus
+            value={gateToken}
+            onChange={(event) => setGateToken(event.target.value)}
+            placeholder="Access token"
+            aria-label="Access token"
+            autoComplete="current-password"
+          />
+          <button type="submit" className="button button--primary" disabled={!gateToken.trim()}>
+            Unlock
+          </button>
+          <p className="tiny muted">
+            One shared secret for this deployment, not a personal account. It is stored in this browser only.
+          </p>
+        </form>
+      </div>
+    );
+  }
+
   return (
     <div className={`app ${panelOpen ? "app--panel" : ""} ${layersOpen ? "app--layers" : ""}`}>
       <TopBar
@@ -1061,10 +1264,10 @@ export default function App() {
             {mode === "idle" ? (
               <>
                 <button type="button" className="map-tool" onClick={beginDraw} title="Draw farm (d)" aria-label="Draw farm boundary">
-                  ✎ <span>Draw farm</span>
+                  âœŽ <span>Draw farm</span>
                 </button>
                 <button type="button" className="map-tool" onClick={startGpsWalk} title="Record a GPS walk (g)" aria-label="Record a GPS boundary walk">
-                  ◎ <span>GPS walk</span>
+                  â—Ž <span>GPS walk</span>
                 </button>
                 <button
                   type="button"
@@ -1073,21 +1276,21 @@ export default function App() {
                   title="Import GeoJSON, KML or GPX"
                   aria-label="Import GeoJSON, KML or GPX"
                 >
-                  ⇪ <span>Import</span>
+                  â‡ª <span>Import</span>
                 </button>
                 {farm ? (
                   <>
                     <button type="button" className="map-tool" onClick={beginEdit} title="Edit vertices (e)" aria-label="Edit boundary vertices">
-                      ✥ <span>Edit</span>
+                      âœ¥ <span>Edit</span>
                     </button>
                     <button type="button" className="map-tool" onClick={beginSplit} title="Split into fields" aria-label="Split farm into fields">
-                      ⧸ <span>Split</span>
+                      â§¸ <span>Split</span>
                     </button>
                     <button
                       type="button"
                       className={`map-tool map-tool--satellite ${satelliteOn ? "is-active" : ""}`}
                       onClick={toggleSatellite}
-                      title="Satellite basemap — Sentinel-2 cloudless 2025 (EOX)"
+                      title="Satellite basemap â€” Sentinel-2 cloudless 2025 (EOX)"
                       aria-label="Toggle satellite view"
                       aria-pressed={satelliteOn}
                     >
@@ -1119,7 +1322,7 @@ export default function App() {
             {mode === "draw" ? (
               <div className="draw-bar" role="status" aria-live="polite">
                 <span className="draw-bar__stat">
-                  <strong>{draft.stats?.vertices ?? 0}</strong> vertices ·{" "}
+                  <strong>{draft.stats?.vertices ?? 0}</strong> vertices Â·{" "}
                   {draft.stats?.areaHa ? `${draft.stats.areaHa.toFixed(2)} ha` : "no area yet"}
                 </span>
                 <button type="button" className="button button--ghost button--small" onClick={() => mapRef.current?.undo()}>
@@ -1164,8 +1367,8 @@ export default function App() {
             {mode === "gps" ? (
               <div className="draw-bar" role="status" aria-live="polite">
                 <span className="draw-bar__stat">
-                  GPS walk · {gps.points} points{gps.accuracy ? ` · ±${Math.round(gps.accuracy)} m` : ""}
-                  {gps.error ? ` · ${gps.error}` : ""}
+                  GPS walk Â· {gps.points} points{gps.accuracy ? ` Â· Â±${Math.round(gps.accuracy)} m` : ""}
+                  {gps.error ? ` Â· ${gps.error}` : ""}
                 </span>
                 <button
                   type="button"
@@ -1195,14 +1398,14 @@ export default function App() {
             <div className="map-notice" role="status">
               {mapNotice}
               <button type="button" className="icon-button" onClick={() => setMapNotice(null)} aria-label="Dismiss map message">
-                ✕
+                âœ•
               </button>
             </div>
           ) : null}
 
           {satelliteOn ? (
             <div className="map-satellite-note" role="status">
-              <strong>Satellite basemap</strong> Sentinel-2 cloudless 2025 · 10 m · © EOX (CC BY-SA 4.0)
+              <strong>Satellite basemap</strong> Sentinel-2 cloudless 2025 Â· 10 m Â· Â© EOX (CC BY-SA 4.0)
             </div>
           ) : null}
 
@@ -1216,7 +1419,7 @@ export default function App() {
 
           {!online ? (
             <div className="offline-banner" role="status">
-              Offline — showing saved data{farmsSavedAt ? ` from ${relativeAge(farmsSavedAt)}` : ""}. Live updates need
+              Offline â€” showing saved data{farmsSavedAt ? ` from ${relativeAge(farmsSavedAt)}` : ""}. Live updates need
               connectivity.
             </div>
           ) : null}
@@ -1272,7 +1475,7 @@ export default function App() {
         onClose={() => setSearchOpen(false)}
         onSelect={(result) => {
           mapRef.current?.flyTo(result.lat, result.lon, result.kind === "region" ? 8 : 13);
-          setMapNotice(`${result.name}${result.district ? ` · ${result.district}` : ""}${result.region ? ` · ${result.region}` : ""}`);
+          setMapNotice(`${result.name}${result.district ? ` Â· ${result.district}` : ""}${result.region ? ` Â· ${result.region}` : ""}`);
           if (window.innerWidth <= 980) setPanelOpen(false);
         }}
         onDrawHere={() => {
@@ -1298,6 +1501,8 @@ export default function App() {
         usage={usage}
         onClearOffline={() => void clearOffline()}
         onExportAll={handleExportAll}
+        me={authUser}
+        onSignOut={() => void signOut()}
       />
 
       <SaveFarmModal
@@ -1333,7 +1538,7 @@ export default function App() {
       {catalogBusy ? (
         <div className="busy-veil" role="status" aria-live="polite">
           <span className="spinner" aria-hidden="true" />
-          Working…
+          Workingâ€¦
         </div>
       ) : null}
     </div>

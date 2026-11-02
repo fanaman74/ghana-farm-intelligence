@@ -10,3 +10,8 @@ numpy>=1.26,<3.0
 pillow>=10.0,<13.0
 reportlab>=4.1,<6.0
 python-multipart>=0.0.9
+# Hardened XML parsing for KML/GPX uploads (ElementTree allows entity expansion).
+defusedxml>=0.7.1
+# IANA time zone database. Present on most Linux images, absent on Windows;
+# app.config falls back to UTC, which is the same clock as Africa/Accra.
+tzdata>=2024.1

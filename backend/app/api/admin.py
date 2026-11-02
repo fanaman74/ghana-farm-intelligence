@@ -7,6 +7,7 @@ scraped or invented: every record requires a source and an observation date.
 from __future__ import annotations
 
 import json
+import secrets
 import uuid
 from datetime import datetime, timezone
 from typing import Any
@@ -25,7 +26,8 @@ def require_admin(x_admin_token: str | None = Header(default=None)) -> None:
         # Local-first deployment without a token: read/write is allowed but this
         # is recorded in the audit metadata returned by /admin/info.
         return
-    if not x_admin_token or x_admin_token != settings.admin_token:
+    # compare_digest: a plain != leaks the matching prefix length through timing.
+    if not x_admin_token or not secrets.compare_digest(x_admin_token, settings.admin_token):
         raise HTTPException(status_code=401, detail="A valid X-Admin-Token header is required.")
 
 
@@ -121,7 +123,8 @@ def create_price(body: MarketPriceCreate, x_admin_token: str | None = Header(def
 
 
 @router.get("/admin/stats")
-def stats() -> dict[str, Any]:
+def stats(x_admin_token: str | None = Header(default=None)) -> dict[str, Any]:
+    require_admin(x_admin_token)
     with get_conn() as conn:
         farms = conn.execute("SELECT COUNT(*) FROM farms").fetchone()[0]
         fields = conn.execute("SELECT COUNT(*) FROM farm_fields").fetchone()[0]

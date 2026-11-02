@@ -2,8 +2,10 @@
 
 * Daily and monthly COGs are read with GDAL range requests; only the farm window
   is fetched.
-* The 30/90-day totals are exact for the periods stated and always end on the
-  latest day CHIRPS has published — never on "today" if data is lagging.
+* The 30/90-day totals always end on the latest day CHIRPS has published — never
+  on "today" if data is lagging — and each window reports `complete: false`, its
+  covered day count and the missing days when a raster in the window was absent.
+  An incomplete window is compared with the same number of baseline days.
 * The anomaly baseline is a bundled 1991–2020 Ghana climatology derived from the
   same monthly product.
 """
@@ -21,11 +23,11 @@ from typing import Any
 
 import numpy as np
 
-from ..config import GH_TZ, SEED_DIR, settings
+from ..config import GH_TZ, SEED_DIR
 from ..db import cache_get, cache_put
-from ..geo.geodesy import centroid_lonlat, ensure_shapely, geodesic_area_m2
+from ..geo.geodesy import ensure_shapely, polygon_hash
 from ..geo.raster import open_raster, read_polygon
-from ..utils import iso_now, stable_hash
+from ..utils import iso_now
 from .base import ProviderError, Section, Source, STATUS_OK, cached, client, request
 from .registry import provider_map
 
@@ -98,7 +100,7 @@ def _read_window_mean(url: str, geom) -> tuple[float | None, dict[str, Any]]:
         if not valid.any():
             return None, {"valid_fraction": 0.0, "pixels": int(rw.mask.sum())}
         mean = float(np.average(values[valid], weights=rw.weights[valid]))
-        total = rw.weights[valid].sum()
+        total = rw.weights[rw.mask].sum()
         fraction = float(rw.weights[valid & rw.mask].sum() / total) if total else 0.0
         return mean, {
             "valid_fraction": round(fraction, 4),
@@ -108,7 +110,7 @@ def _read_window_mean(url: str, geom) -> tuple[float | None, dict[str, Any]]:
 
 
 def daily_value(day: date, geom) -> dict[str, Any]:
-    geom_hash = stable_hash([round(v, 6) for v in geom.bounds])
+    geom_hash = polygon_hash(geom)
     cache_key = f"{PROVIDER}:daily:{geom_hash}:{day.isoformat()}"
 
     def fetch() -> dict[str, Any]:
@@ -129,7 +131,7 @@ def daily_value(day: date, geom) -> dict[str, Any]:
 
 
 def monthly_value(year: int, month: int, geom) -> dict[str, Any]:
-    geom_hash = stable_hash([round(v, 6) for v in geom.bounds])
+    geom_hash = polygon_hash(geom)
     cache_key = f"{PROVIDER}:monthly:{geom_hash}:{year}-{month:02d}"
 
     def fetch() -> dict[str, Any]:
@@ -158,13 +160,35 @@ def _months_between(start: date, end: date) -> list[tuple[int, int]]:
     return months
 
 
+def _safe_daily(day: date, geom) -> dict[str, Any]:
+    """Daily value, or an explicit null when the raster is unavailable."""
+    try:
+        return daily_value(day, geom)
+    except ProviderError as exc:
+        log.warning("CHIRPS daily %s unavailable: %s", day, exc)
+        return {"date": day.isoformat(), "mm": None}
+
+
+def _safe_monthly(year: int, month: int, geom) -> dict[str, Any]:
+    try:
+        return monthly_value(year, month, geom)
+    except ProviderError as exc:
+        log.warning("CHIRPS monthly %s-%02d unavailable: %s", year, month, exc)
+        return {"year": year, "month": month, "mm": None}
+
+
 def _window_total(start: date, end: date, geom) -> dict[str, Any]:
-    """Exact total for [start, end] using monthly rasters for whole months."""
+    """Total for [start, end], stating openly what was missing.
+
+    Whole months use the monthly product, partial months the daily product. A
+    missing raster is recorded, never counted as zero rain: a partial sum
+    presented as a total reads as drought.
+    """
     total = 0.0
     days_covered = 0
     months: list[dict[str, Any]] = []
+    missing: list[str] = []
     sources_used: set[str] = set()
-    partial_days: list[date] = []
     for year, month in _months_between(start, end):
         month_start = date(year, month, 1)
         month_end = date(year, month, calendar.monthrange(year, month)[1])
@@ -173,8 +197,10 @@ def _window_total(start: date, end: date, geom) -> dict[str, Any]:
         if overlap_start > overlap_end:
             continue
         if overlap_start == month_start and overlap_end == month_end:
-            value = monthly_value(year, month, geom)
+            value = _safe_monthly(year, month, geom)
             if value.get("mm") is None:
+                missing.append(f"{year}-{month:02d}")
+                months.append({"year": year, "month": month, "mm": None, "mode": "monthly raster"})
                 continue
             total += float(value["mm"])
             days_covered += (month_end - month_start).days + 1
@@ -182,28 +208,33 @@ def _window_total(start: date, end: date, geom) -> dict[str, Any]:
             sources_used.add("monthly")
         else:
             days = [overlap_start + timedelta(days=i) for i in range((overlap_end - overlap_start).days + 1)]
-            partial_days.extend(days)
             with ThreadPoolExecutor(max_workers=10) as pool:
-                results = list(pool.map(lambda d: daily_value(d, geom), days))
-            subtotal = sum(float(r["mm"] or 0) for r in results if r.get("mm") is not None)
+                results = list(pool.map(lambda d: _safe_daily(d, geom), days))
+            subtotal = sum(float(r["mm"]) for r in results if r.get("mm") is not None)
             counted = sum(1 for r in results if r.get("mm") is not None)
             total += subtotal
             days_covered += counted
+            missing.extend(r["date"] for r in results if r.get("mm") is None)
             months.append(
                 {
                     "year": year,
                     "month": month,
-                    "mm": round(subtotal, 1),
+                    "mm": round(subtotal, 1) if counted else None,
                     "mode": "daily rasters",
                     "days": counted,
                 }
             )
             sources_used.add("daily")
+    expected = (end - start).days + 1
     return {
         "start": start.isoformat(),
         "end": end.isoformat(),
-        "total_mm": round(total, 1),
+        "total_mm": round(total, 1) if days_covered else None,
         "days": days_covered,
+        "expected_days": expected,
+        "missing_days": len(missing),
+        "missing": missing[:40],
+        "complete": days_covered == expected,
         "months": months,
         "sources_used": sorted(sources_used),
     }
@@ -238,7 +269,9 @@ def climatology(geom) -> dict[str, Any] | None:
     return None
 
 
-def _baseline_total(start: date, end: date, clim: dict[str, Any]) -> float | None:
+def _baseline_total(
+    start: date, end: date, clim: dict[str, Any], days_covered: int | None = None
+) -> float | None:
     monthly = clim.get("monthly_mean_mm") if clim else None
     if not monthly:
         return None
@@ -255,6 +288,12 @@ def _baseline_total(start: date, end: date, clim: dict[str, Any]) -> float | Non
             return None
         share = ((overlap_end - overlap_start).days + 1) / ((month_end - month_start).days + 1)
         total += month_total * share
+    expected = (end - start).days + 1
+    if days_covered is not None and 0 < days_covered < expected:
+        # Compare like with like: an incomplete observed record is measured against
+        # the same share of the baseline instead of against the full window, which
+        # would always look like a deficit.
+        total *= days_covered / expected
     return total
 
 
@@ -315,7 +354,7 @@ def analyse(geom) -> Section:
     # Daily series for the most recent 30 days (also powers the timeline).
     daily_days = [end - timedelta(days=i) for i in range(29, -1, -1)]
     with ThreadPoolExecutor(max_workers=10) as pool:
-        daily = list(pool.map(lambda day: daily_value(day, geom), daily_days))
+        daily = list(pool.map(lambda day: _safe_daily(day, geom), daily_days))
     daily_series = [
         {
             "date": row["date"],
@@ -338,25 +377,58 @@ def analyse(geom) -> Section:
     clim = climatology(geom)
     anomalies = {}
     for name, (start, stop) in windows.items():
-        baseline = _baseline_total(start, stop, clim) if clim else None
-        observed = totals[name]["total_mm"]
+        window = totals[name]
+        observed = window.get("total_mm")
+        baseline = (
+            _baseline_total(start, stop, clim, days_covered=window.get("days")) if clim else None
+        )
+        if observed is None:
+            anomalies[name] = {
+                "observed_mm": None,
+                "baseline_mm": None,
+                "percent_of_normal": None,
+                "label": "No daily or monthly rainfall raster was available for this window",
+                "complete": False,
+                "days_covered": 0,
+            }
+            continue
         if baseline is not None and baseline > 0:
             percent = observed / baseline * 100
-            anomalies[name] = {
+            anomaly = {
                 "observed_mm": observed,
                 "baseline_mm": round(baseline, 1),
                 "anomaly_mm": round(observed - baseline, 1),
                 "percent_of_normal": round(percent, 0),
                 "label": _anomaly_label(percent),
                 "baseline_period": clim["period"] if clim else None,
+                "complete": bool(window.get("complete")),
+                "days_covered": window.get("days"),
+                "expected_days": window.get("expected_days"),
             }
+            if not window.get("complete"):
+                anomaly["label"] = f"{anomaly['label']} (partial record: {window.get('days')} of {window.get('expected_days')} days)"
+            anomalies[name] = anomaly
         else:
             anomalies[name] = {
                 "observed_mm": observed,
                 "baseline_mm": None,
                 "percent_of_normal": None,
                 "label": "No baseline available",
+                "complete": bool(window.get("complete")),
+                "days_covered": window.get("days"),
             }
+
+    incomplete = [
+        f"{name.replace('last_', '').replace('_days', '-day')} ({totals[name]['days']}/{totals[name]['expected_days']} days)"
+        for name in totals
+        if not totals[name].get("complete")
+    ]
+    if incomplete:
+        warnings.append(
+            "Some CHIRPS rasters were missing, so these totals cover fewer days than requested: "
+            + ", ".join(incomplete)
+            + ". The 1991–2020 baseline is scaled to the same number of days; the anomaly is marked partial."
+        )
 
     monthly_series = []
     months_window = _months_between(end - timedelta(days=364), end)[:13]

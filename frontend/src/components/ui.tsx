@@ -287,36 +287,52 @@ export function Modal({
 }) {
   const titleId = useId();
   const ref = useRef<HTMLDivElement | null>(null);
+  // Callers pass an inline arrow, so depending on onClose re-ran this effect on
+  // every parent render — which moved focus back to the trigger and then to the
+  // first field while the user was typing (a job poll re-renders every 900 ms).
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
   useEffect(() => {
     if (!open) return;
+    const previous = document.activeElement as HTMLElement | null;
     const handle = (event: KeyboardEvent) => {
-      if (event.key === "Escape") onClose();
-      if (event.key === "Tab" && ref.current) {
-        const focusable = ref.current.querySelectorAll<HTMLElement>(
-          'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])',
-        );
-        if (!focusable.length) return;
-        const first = focusable[0];
-        const last = focusable[focusable.length - 1];
-        if (event.shiftKey && document.activeElement === first) {
-          event.preventDefault();
-          last.focus();
-        } else if (!event.shiftKey && document.activeElement === last) {
-          event.preventDefault();
-          first.focus();
-        }
+      if (event.key === "Escape") {
+        event.stopPropagation();
+        onCloseRef.current();
+        return;
+      }
+      if (event.key !== "Tab" || !ref.current) return;
+      const focusable = Array.from(
+        ref.current.querySelectorAll<HTMLElement>(
+          'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
+        ),
+      ).filter((element) => element.offsetParent !== null || element === document.activeElement);
+      if (!focusable.length) return;
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      const active = document.activeElement as HTMLElement | null;
+      if (!active || !ref.current.contains(active)) {
+        // Focus escaped into the page behind: bring it back into the dialog.
+        event.preventDefault();
+        first.focus();
+      } else if (event.shiftKey && active === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && active === last) {
+        event.preventDefault();
+        first.focus();
       }
     };
-    document.addEventListener("keydown", handle);
-    const previous = document.activeElement as HTMLElement | null;
-    setTimeout(() => {
+    document.addEventListener("keydown", handle, true);
+    const timer = window.setTimeout(() => {
       ref.current?.querySelector<HTMLElement>("input, button, select, textarea")?.focus();
     }, 30);
     return () => {
-      document.removeEventListener("keydown", handle);
+      document.removeEventListener("keydown", handle, true);
+      window.clearTimeout(timer);
       previous?.focus?.();
     };
-  }, [open, onClose]);
+  }, [open]);
 
   if (!open) return null;
   return (

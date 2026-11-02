@@ -11,6 +11,7 @@ from fastapi import APIRouter, File, Form, HTTPException, Query, Request, Upload
 from fastapi.responses import JSONResponse, Response
 
 from .. import analysis as analysis_service
+from .. import auth
 from ..config import settings
 from ..db import get_conn, job_get, job_latest_for_farm
 from ..geo import admin
@@ -32,26 +33,78 @@ from ..utils import iso_now
 
 router = APIRouter()
 
+MAX_UPLOAD_BYTES = 12 * 1024 * 1024
+
+
+async def _read_capped(file: UploadFile, limit: int = MAX_UPLOAD_BYTES) -> bytes:
+    """Read an upload in bounded chunks, refusing as soon as it exceeds the cap.
+
+    ``await file.read()`` buffered the whole body before the size check ran, so a
+    large POST was fully consumed in memory before being rejected.
+    """
+    if file.size is not None and file.size > limit:
+        raise HTTPException(status_code=413, detail="File is larger than 12 MB")
+    chunks: list[bytes] = []
+    total = 0
+    while True:
+        chunk = await file.read(256 * 1024)
+        if not chunk:
+            break
+        total += len(chunk)
+        if total > limit:
+            raise HTTPException(status_code=413, detail="File is larger than 12 MB")
+        chunks.append(chunk)
+    return b"".join(chunks)
+
 
 def _now() -> str:
     return datetime.now(timezone.utc).isoformat(timespec="seconds")
 
 
+def _owner_condition() -> tuple[str, tuple[Any, ...]]:
+    """SQL condition limiting farm rows to what the acting account may see.
+
+    With accounts disabled every row is visible (the deployment is local or gated
+    by the shared token). With accounts enabled an administrator sees everything
+    and everyone else sees only their own farms; unowned rows predate accounts and
+    are administrator-only.
+    """
+    if not auth.accounts_enabled():
+        return "1=1", ()
+    user = auth.current_user()
+    if user is None:
+        return "1=0", ()
+    if user["is_admin"]:
+        return "1=1", ()
+    return "owner_id = ?", (user["id"],)
+
+
+def _current_owner_id() -> str | None:
+    user = auth.current_user()
+    return user["id"] if (auth.accounts_enabled() and user) else None
+
+
 def _farm_row(farm_id: str) -> dict[str, Any]:
     with get_conn() as conn:
         row = conn.execute("SELECT * FROM farms WHERE id=?", (farm_id,)).fetchone()
-    if row is None:
+    # A farm the caller may not see is reported as missing, not forbidden: the
+    # response must not confirm that another account's boundary exists.
+    if row is None or not auth.can_see_farm(row["owner_id"]):
         raise HTTPException(status_code=404, detail="Farm not found")
     return dict(row)
 
 
 def _other_geometries(exclude_farm_id: str | None = None) -> list[tuple[str, str, Any]]:
+    condition, params = _owner_condition()
     with get_conn() as conn:
         rows = conn.execute(
-            "SELECT id,name,geometry FROM farms WHERE id != ?", (exclude_farm_id or "",)
+            f"SELECT id,name,geometry FROM farms WHERE {condition} AND id != ?",
+            (*params, exclude_farm_id or ""),
         ).fetchall()
         fields = conn.execute(
-            "SELECT id,name,geometry FROM farm_fields WHERE farm_id != ?", (exclude_farm_id or "",)
+            "SELECT id,name,geometry FROM farm_fields WHERE farm_id != ?"
+            f" AND farm_id IN (SELECT id FROM farms WHERE {condition})",
+            (exclude_farm_id or "", *params),
         ).fetchall()
     output = []
     for row in list(rows) + list(fields):
@@ -89,11 +142,18 @@ def _serialise_farm(row: dict[str, Any], *, include_children: bool = True) -> di
 
 @router.get("/farms")
 def list_farms() -> dict[str, Any]:
+    condition, params = _owner_condition()
     with get_conn() as conn:
-        rows = conn.execute("SELECT * FROM farms ORDER BY updated_at DESC").fetchall()
+        rows = conn.execute(
+            f"SELECT * FROM farms WHERE {condition} ORDER BY updated_at DESC", params
+        ).fetchall()
         field_counts = {
             row["farm_id"]: row["count"]
-            for row in conn.execute("SELECT farm_id, COUNT(*) AS count FROM farm_fields GROUP BY farm_id").fetchall()
+            for row in conn.execute(
+                "SELECT farm_id, COUNT(*) AS count FROM farm_fields WHERE farm_id IN"
+                f" (SELECT id FROM farms WHERE {condition}) GROUP BY farm_id",
+                params,
+            ).fetchall()
         }
     farms = []
     for row in rows:
@@ -137,8 +197,9 @@ def create_farm(body: FarmCreate) -> dict[str, Any]:
     with get_conn() as conn:
         conn.execute(
             """INSERT INTO farms (id,name,region,district,zone,crop_id,crop_variety,planting_date,irrigation,
-            notes,geometry,area_ha,perimeter_m,centroid_lat,centroid_lon,source,is_demo,created_at,updated_at)
-            VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+            notes,geometry,area_ha,perimeter_m,centroid_lat,centroid_lon,source,is_demo,owner_id,
+            created_at,updated_at)
+            VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
             (
                 farm_id,
                 body.name,
@@ -157,6 +218,7 @@ def create_farm(body: FarmCreate) -> dict[str, Any]:
                 info.centroid_lon,
                 body.source,
                 1 if body.is_demo else 0,
+                _current_owner_id(),
                 now,
                 now,
             ),
@@ -349,9 +411,7 @@ async def import_farm(
     name: str | None = Form(default=None),
     crop_id: str | None = Form(default=None),
 ) -> dict[str, Any]:
-    content = await file.read()
-    if len(content) > 12 * 1024 * 1024:
-        raise HTTPException(status_code=413, detail="File is larger than 12 MB")
+    content = await _read_capped(file)
     try:
         parsed = importers.parse_upload(file.filename or "boundary.geojson", content)
         info = validate_geometry(parsed["geometry"])
@@ -369,13 +429,14 @@ async def import_farm(
     with get_conn() as conn:
         conn.execute(
             """INSERT INTO farms (id,name,region,district,zone,crop_id,crop_variety,planting_date,irrigation,
-            notes,geometry,area_ha,perimeter_m,centroid_lat,centroid_lon,source,is_demo,created_at,updated_at)
-            VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+            notes,geometry,area_ha,perimeter_m,centroid_lat,centroid_lon,source,is_demo,owner_id,
+            created_at,updated_at)
+            VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
             (
                 farm_id, farm_name, location.get("region"), location.get("district"), zone["name"],
                 crop_id, None, None, "rainfed", f"Imported from {parsed['format']}",
                 json.dumps(info.geometry), info.area_ha, info.perimeter_m,
-                info.centroid_lat, info.centroid_lon, "imported", 0, now, now,
+                info.centroid_lat, info.centroid_lon, "imported", 0, _current_owner_id(), now, now,
             ),
         )
     return {
@@ -491,7 +552,15 @@ def list_records(farm_id: str) -> dict[str, Any]:
 # --------------------------------------------------------------------------- #
 @router.post("/farms/{farm_id}/analysis")
 def start_analysis(farm_id: str, body: AnalysisRequest) -> dict[str, Any]:
-    farm = _serialise_farm(_farm_row(farm_id), include_children=False)
+    # Load the same shape the job will load, so the route-level cache check and
+    # the job's own check derive an identical key (soil tests and advisories
+    # included).
+    try:
+        farm = analysis_service.load_farm(farm_id)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail="Farm not found") from exc
+    if not auth.can_see_farm(farm.get("owner_id")):
+        raise HTTPException(status_code=404, detail="Farm not found")
     key = analysis_service.analysis_key(
         farm,
         body.field_id,
@@ -511,6 +580,7 @@ def start_analysis(farm_id: str, body: AnalysisRequest) -> dict[str, Any]:
             "planting_date": body.planting_date,
             "management_level": body.management_level,
         },
+        force=body.force,
     )
     return {"cached": False, "job_id": job_id, "poll": f"/api/jobs/{job_id}"}
 
@@ -520,6 +590,12 @@ def get_job(job_id: str) -> dict[str, Any]:
     job = job_get(job_id)
     if job is None:
         raise HTTPException(status_code=404, detail="Job not found")
+    if job.get("farm_id"):
+        with get_conn() as conn:
+            row = conn.execute("SELECT owner_id FROM farms WHERE id=?", (job["farm_id"],)).fetchone()
+        if row is None or not auth.can_see_farm(row["owner_id"]):
+            # Another account's job is indistinguishable from a missing one.
+            raise HTTPException(status_code=404, detail="Job not found")
     return job
 
 

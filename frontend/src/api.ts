@@ -1,5 +1,7 @@
 import type {
+  AccountUser,
   Analysis,
+  AuthMe,
   CropSummary,
   Farm,
   FarmField,
@@ -13,6 +15,38 @@ import type {
 
 const BASE = (import.meta.env.VITE_API_BASE as string | undefined) ?? "";
 
+/** No request may hang forever: a stalled fetch used to lock the whole UI. */
+const DEFAULT_TIMEOUT_MS = 45_000;
+
+const TOKEN_KEY = "gfi.accessToken";
+
+/** The deployment's shared access token, if one is configured. Not per-user auth. */
+export function getAccessToken(): string {
+  try {
+    return window.localStorage.getItem(TOKEN_KEY) ?? "";
+  } catch {
+    return "";
+  }
+}
+
+export function setAccessToken(token: string): void {
+  try {
+    if (token) window.localStorage.setItem(TOKEN_KEY, token);
+    else window.localStorage.removeItem(TOKEN_KEY);
+  } catch {
+    /* private mode: the gate will simply ask again */
+  }
+}
+
+function accessHeaders(): Record<string, string> {
+  const token = getAccessToken();
+  return token ? { "X-Access-Token": token } : {};
+}
+
+function notifyUnauthorized(): void {
+  window.dispatchEvent(new CustomEvent("gfi:unauthorized"));
+}
+
 export class ApiError extends Error {
   status: number;
   detail: unknown;
@@ -24,43 +58,87 @@ export class ApiError extends Error {
   }
 }
 
-async function request<T>(path: string, init?: RequestInit): Promise<T> {
-  let response: Response;
+async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
+  const external = init.signal ?? undefined;
+  const controller = new AbortController();
+  let timedOut = false;
+  const timer = setTimeout(() => {
+    timedOut = true;
+    controller.abort();
+  }, DEFAULT_TIMEOUT_MS);
+  const forwardAbort = () => controller.abort();
+  if (external) {
+    if (external.aborted) controller.abort();
+    else external.addEventListener("abort", forwardAbort);
+  }
+
   try {
-    response = await fetch(`${BASE}${path}`, {
-      ...init,
-      headers: {
-        ...(init?.body instanceof FormData ? {} : { "Content-Type": "application/json" }),
-        ...(init?.headers ?? {}),
-      },
-    });
-  } catch (error) {
-    throw new ApiError(0, "Network unavailable. Check your connection.", error);
-  }
-  if (!response.ok) {
-    let detail: unknown = null;
-    let message = `Request failed (${response.status})`;
+    let response: Response;
     try {
-      const payload = await response.json();
-      detail = payload.detail ?? payload;
-      if (typeof payload.detail === "string") message = payload.detail;
-      else if (payload.detail?.message) message = payload.detail.message;
-      else if (payload.message) message = payload.message;
-    } catch {
-      /* non-JSON error */
+      response = await fetch(`${BASE}${path}`, {
+        ...init,
+        signal: controller.signal,
+        headers: {
+          ...(init.body instanceof FormData ? {} : { "Content-Type": "application/json" }),
+          ...accessHeaders(),
+          ...(init.headers ?? {}),
+        },
+      });
+    } catch (error) {
+      if (external?.aborted) throw new ApiError(499, "Request cancelled", error);
+      if (timedOut) {
+        throw new ApiError(408, "The server did not answer in time. Check your connection and try again.", error);
+      }
+      throw new ApiError(0, "Network unavailable. Check your connection.", error);
     }
-    throw new ApiError(response.status, message, detail);
+    if (response.status === 401) notifyUnauthorized();
+    if (!response.ok) {
+      let detail: unknown = null;
+      let message = `Request failed (${response.status})`;
+      try {
+        const payload = await response.json();
+        detail = payload.detail ?? payload;
+        if (typeof payload.detail === "string") message = payload.detail;
+        else if (payload.detail?.message) message = payload.detail.message;
+        else if (payload.message) message = payload.message;
+      } catch {
+        /* non-JSON error */
+      }
+      throw new ApiError(response.status, message, detail);
+    }    if (response.status === 204) return undefined as T;
+    return (await response.json()) as T;
+  } finally {
+    clearTimeout(timer);
+    external?.removeEventListener("abort", forwardAbort);
   }
-  if (response.status === 204) return undefined as T;
-  return (await response.json()) as T;
 }
 
 export const api = {
-  health: () => request<{ status: string; time: { time: string; date: string } }>("/api/health"),
+  health: () =>
+    request<{
+      status: string;
+      time: { time: string; date: string };
+      auth?: { farm_data: string; access_token_required: boolean; admin_token_required: boolean };
+    }>("/api/health"),
   meta: () => request<Record<string, unknown>>("/api/meta"),
 
-  listFarms: () => request<{ farms: Farm[]; count: number }>("/api/farms"),
-  getFarm: (id: string) => request<{ farm: Farm }>(`/api/farms/${id}`),
+  // ---- accounts -----------------------------------------------------------
+  authMe: (signal?: AbortSignal) => request<AuthMe>("/api/auth/me", { signal }),
+  login: (username: string, password: string) =>
+    request<{ authenticated: boolean; user: AccountUser }>("/api/auth/login", {
+      method: "POST",
+      body: JSON.stringify({ username, password }),
+    }),
+  logout: () => request<{ authenticated: boolean }>("/api/auth/logout", { method: "POST" }),
+  listUsers: () => request<{ users: AccountUser[] }>("/api/auth/users"),
+  createUser: (body: { username: string; password: string; is_admin: boolean }) =>
+    request<{ user: AccountUser }>("/api/auth/users", { method: "POST", body: JSON.stringify(body) }),
+  updateUser: (id: string, body: Record<string, unknown>) =>
+    request<{ user: AccountUser }>(`/api/auth/users/${id}`, { method: "PATCH", body: JSON.stringify(body) }),
+  deleteUser: (id: string) => request<void>(`/api/auth/users/${id}`, { method: "DELETE" }),
+
+  listFarms: (signal?: AbortSignal) => request<{ farms: Farm[]; count: number }>("/api/farms", { signal }),
+  getFarm: (id: string, signal?: AbortSignal) => request<{ farm: Farm }>(`/api/farms/${id}`, { signal }),
   createFarm: (body: Record<string, unknown>) =>
     request<{ farm: Farm; validation: Record<string, unknown>; overlaps: unknown[]; warnings: string[] }>(
       "/api/farms",
@@ -110,24 +188,26 @@ export const api = {
     });
   },
 
-  startAnalysis: (farmId: string, body: Record<string, unknown>) =>
+  startAnalysis: (farmId: string, body: Record<string, unknown>, signal?: AbortSignal) =>
     request<{ cached: boolean; job_id: string | null; analysis?: Analysis }>(`/api/farms/${farmId}/analysis`, {
       method: "POST",
       body: JSON.stringify(body),
+      signal,
     }),
-  getJob: (jobId: string) => request<Job>(`/api/jobs/${jobId}`),
-  latestAnalysis: (farmId: string) => request<{ analysis: Analysis | null; job: Partial<Job> | null }>(
+  getJob: (jobId: string, signal?: AbortSignal) => request<Job>(`/api/jobs/${jobId}`, { signal }),
+  latestAnalysis: (farmId: string, signal?: AbortSignal) => request<{ analysis: Analysis | null; job: Partial<Job> | null }>(
     `/api/farms/${farmId}/analysis/latest`,
+    { signal },
   ),
 
-  farmLayer: (farmId: string, layerId: string, fieldId?: string | null) =>
+  farmLayer: (farmId: string, layerId: string, fieldId?: string | null, signal?: AbortSignal) =>
     request<LayerChip>(
       `/api/farms/${farmId}/layers/${layerId.replace(/-/g, "_")}${fieldId ? `?field_id=${encodeURIComponent(fieldId)}` : ""}`,
-      { method: "GET" },
+      { method: "GET", signal },
     ),
 
-  satelliteContext: (farmId: string, bufferM = 2500) =>
-    request<SatelliteChip>(`/api/farms/${farmId}/satellite?buffer_m=${bufferM}`, { method: "GET" }),
+  satelliteContext: (farmId: string, bufferM = 2500, signal?: AbortSignal) =>
+    request<SatelliteChip>(`/api/farms/${farmId}/satellite?buffer_m=${bufferM}`, { method: "GET", signal }),
 
   addSoilTest: (farmId: string, body: Record<string, unknown>) =>
     request<{ soil_test: SoilTest }>(`/api/farms/${farmId}/soil-tests`, {
@@ -140,8 +220,8 @@ export const api = {
       body: JSON.stringify(body),
     }),
 
-  searchPlaces: (query: string) =>
-    request<{ results: PlaceResult[] }>(`/api/places/search?q=${encodeURIComponent(query)}&limit=12`),
+  searchPlaces: (query: string, signal?: AbortSignal) =>
+    request<{ results: PlaceResult[] }>(`/api/places/search?q=${encodeURIComponent(query)}&limit=12`, { signal }),
   reversePlace: (lat: number, lon: number) =>
     request<{
       inside_ghana: boolean;
@@ -170,6 +250,35 @@ export const api = {
     `${BASE}/api/farms/${farmId}/export?format=${format}`,
 };
 
+/**
+ * Download an export as a blob rather than navigating to the URL.
+ *
+ * `window.open` cannot send the access-token header, so a token-protected
+ * deployment would answer 401 to every export.
+ */
+export async function downloadExport(
+  farmId: string,
+  format: "geojson" | "kml" | "csv" | "pdf",
+): Promise<Blob> {
+  const controller = new AbortController();
+  // PDF generation is slower than a JSON read.
+  const timer = setTimeout(() => controller.abort(), DEFAULT_TIMEOUT_MS * 2);
+  try {
+    const response = await fetch(`${BASE}/api/farms/${farmId}/export?format=${format}`, {
+      headers: accessHeaders(),
+      signal: controller.signal,
+    });
+    if (response.status === 401) notifyUnauthorized();
+    if (!response.ok) throw new ApiError(response.status, `Export failed (${response.status})`);
+    return await response.blob();
+  } catch (error) {
+    if (error instanceof ApiError) throw error;
+    throw new ApiError(0, "The export could not be downloaded. Check your connection.", error);
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 export async function pollJob(
   jobId: string,
   onUpdate: (job: Job) => void,
@@ -180,7 +289,10 @@ export async function pollJob(
   const started = Date.now();
   for (;;) {
     if (options.signal?.aborted) throw new ApiError(499, "Analysis cancelled");
-    const job = await api.getJob(jobId);
+    const job = await api.getJob(jobId, options.signal);
+    // An abort issued while the request was in flight must not be applied to the
+    // panel of whatever farm is selected by now.
+    if (options.signal?.aborted) throw new ApiError(499, "Analysis cancelled");
     onUpdate(job);
     if (job.status === "complete" || job.status === "failed") return job;
     if (Date.now() - started > timeout) {
