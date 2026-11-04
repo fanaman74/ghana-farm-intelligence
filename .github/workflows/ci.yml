@@ -116,11 +116,11 @@ jobs:
           curl -fsS http://127.0.0.1:8000/ | grep -q 'id="root"' || { report "PWA shell missing"; exit 1; }
 
           # PID 1 must not be root: the entrypoint drops to uid 10001 with gosu.
-          # Ask docker for the numeric uid rather than mapping a name, and print
-          # the table so a formatting surprise is visible in the log.
-          docker top gfi -o pid,uid || true
-          pid1_uid=$(docker top gfi -o pid,uid | awk '$1 == 1 {print $2}')
-          echo "pid 1 uid: ${pid1_uid:-unknown}"
+          # Use the host's ps on the container's real PID; docker top -o was not
+          # giving a stable column layout on this runner.
+          container_pid=$(docker inspect -f '{{.State.Pid}}' gfi)
+          pid1_uid=$(ps -o uid= -p "$container_pid" | tr -d ' ')
+          echo "container pid: ${container_pid:-unknown} uid: ${pid1_uid:-unknown}"
           test -n "$pid1_uid" || { report "could not read PID 1 uid"; exit 1; }
           test "$pid1_uid" != "0" || { report "PID 1 is root"; exit 1; }
 
