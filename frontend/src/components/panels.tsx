@@ -231,18 +231,30 @@ export function LayersPanel({
   onChange,
   onClose,
   analysis,
+  hasFarm,
 }: {
   layers: LayerState[];
   onChange: (id: string, patch: Partial<LayerState>) => void;
   onClose: () => void;
   analysis: Analysis | null;
+  hasFarm: boolean;
 }) {
+  const latestScene = analysis?.sections.vegetation?.data?.latest;
+  const cloudFree = latestScene?.cloud_free_fraction;
+  const sceneNote =
+    latestScene?.date && typeof cloudFree === "number"
+      ? `${latestScene.date} scene · ${Math.round(cloudFree * 100)}% cloud-free over this field`
+      : null;
   const groups: Array<{ title: string; ids: string[] }> = [
     { title: "Base map", ids: ["basemap", "districts", "roads", "water", "farms"] },
     { title: "Satellite imagery", ids: ["true-color", "ndvi", "ndmi"] },
     { title: "Evidence layers", ids: ["soil-ph", "soil-carbon", "soil-texture", "cropland", "slope", "elevation", "evapotranspiration"] },
   ];
   const byId = Object.fromEntries(layers.map((layer) => [layer.id, layer]));
+  // Imagery and evidence groups stay folded until there is a field to draw them
+  // for; the base map is always useful. A manual toggle wins over the default.
+  const [openGroups, setOpenGroups] = useState<Record<string, boolean>>({});
+  const isOpen = (title: string) => openGroups[title] ?? (title === "Base map" ? true : hasFarm);
   return (
     <aside className="panel panel--left" aria-label="Map layers">
       <div className="panel__head">
@@ -253,19 +265,40 @@ export function LayersPanel({
       </div>
       <div className="panel__body">
         {groups.map((group) => (
-          <section key={group.title} className="layer-group">
-            <h3>{group.title}</h3>
+          <section
+            key={group.title}
+            className={`layer-group ${isOpen(group.title) ? "" : "layer-group--collapsed"}`}
+          >
+            <h3>
+              <button
+                type="button"
+                className="layer-group__toggle"
+                aria-expanded={isOpen(group.title)}
+                onClick={() =>
+                  setOpenGroups((current) => ({ ...current, [group.title]: !isOpen(group.title) }))
+                }
+              >
+                <span>{group.title}</span>
+                <span className="layer-group__chevron" aria-hidden="true">
+                  {isOpen(group.title) ? "▾" : "▸"}
+                </span>
+              </button>
+            </h3>
             {group.ids.map((id) => {
               const layer = byId[id];
               if (!layer) return null;
+              // Every layer except the vector base map is clipped to a polygon, so
+              // without a farm there is nothing to render. Saying so beats a switch
+              // that moves and changes nothing on the map.
+              const usable = layer.available && (hasFarm || layer.kind === "vector");
               return (
-                <div key={id} className={`layer ${layer.available ? "" : "layer--disabled"}`}>
+                <div key={id} className={`layer ${usable ? "" : "layer--disabled"}`}>
                   <div className="layer__head">
                     <label className="switch">
                       <input
                         type="checkbox"
                         checked={layer.visible}
-                        disabled={!layer.available && !layer.loading}
+                        disabled={!usable && !layer.loading}
                         onChange={(event) => onChange(id, { visible: event.target.checked })}
                       />
                       <span className="switch__track" aria-hidden="true" />
@@ -273,13 +306,15 @@ export function LayersPanel({
                     </label>
                     {layer.loading ? (
                       <Pill tone="neutral">Loading…</Pill>
-                    ) : layer.available ? (
+                    ) : usable ? (
                       <span className="tiny muted">{Math.round(layer.opacity * 100)}%</span>
-                    ) : (
+                    ) : hasFarm ? (
                       <Pill tone="warn">No data</Pill>
+                    ) : (
+                      <Pill tone="neutral">Needs a farm</Pill>
                     )}
                   </div>
-                  {layer.available ? (
+                  {usable ? (
                     <input
                       className="range"
                       type="range"
@@ -291,9 +326,21 @@ export function LayersPanel({
                       onChange={(event) => onChange(id, { opacity: Number(event.target.value) })}
                     />
                   ) : (
-                    <p className="tiny muted">{layer.unavailableReason}</p>
+                    <p className="tiny muted">
+                      {hasFarm || layer.kind === "vector"
+                        ? layer.unavailableReason
+                        : "Select or draw a farm first — every evidence layer is clipped to its boundary."}
+                    </p>
                   )}
                   <p className="layer__desc">{layer.description}</p>
+                  {layer.kind === "imagery" && sceneNote ? (
+                    <p className="layer__meta tiny muted">
+                      {sceneNote}
+                      {typeof cloudFree === "number" && cloudFree < 0.6
+                        ? " — cloudy pixels are left transparent, not estimated."
+                        : ""}
+                    </p>
+                  ) : null}
                   {layer.resolutionM ? (
                     <p className="layer__meta tiny muted">
                       {layer.resolutionM} m grid
@@ -301,7 +348,7 @@ export function LayersPanel({
                         ? ` · ${formatNumber(layer.valueRange[0], 2)}–${formatNumber(layer.valueRange[1], 2)} ${layer.unit ?? ""}`
                         : ""}
                     </p>
-                  ) : layer.available && layer.kind === "derived" ? (
+                  ) : usable && layer.kind === "derived" ? (
                     <p className="layer__meta tiny muted">Toggle on to render this field’s grid</p>
                   ) : null}
                   {layer.legend ? (
@@ -1959,6 +2006,7 @@ export function Onboarding({
   onGps,
   onSample,
   onSettings,
+  onSkip,
   busy,
   error,
 }: {
@@ -1968,6 +2016,7 @@ export function Onboarding({
   onGps: () => void;
   onSample: () => void;
   onSettings: () => void;
+  onSkip: () => void;
   busy: boolean;
   error: string | null;
 }) {
@@ -1975,7 +2024,12 @@ export function Onboarding({
     <div className="onboarding" role="dialog" aria-modal="false" aria-label="Getting started">
       <div className="onboarding__card">
         <div className="onboarding__head">
-          <Pill tone="accent">Ghana first</Pill>
+          <div className="onboarding__head-row">
+            <Pill tone="accent">Ghana first</Pill>
+            <button type="button" className="icon-button" onClick={onSkip} aria-label="Skip getting started">
+              ✕
+            </button>
+          </div>
           <h2>Find your farm, then see what the data says</h2>
           <p className="muted">
             Every result uses the polygon you draw or import — soil, rainfall, satellite imagery and terrain are
@@ -2036,9 +2090,14 @@ export function Onboarding({
           </li>
         </ol>
         {error ? <p className="form-error">{error}</p> : null}
-        <p className="tiny muted">
-          Works on a modest phone and offline once an analysis has been computed. No trackers; boundaries stay private.
-        </p>
+        <div className="onboarding__foot">
+          <p className="tiny muted">
+            Works on a modest phone and offline once an analysis has been computed. No trackers; boundaries stay private.
+          </p>
+          <button type="button" className="button button--ghost" onClick={onSkip}>
+            Skip for now
+          </button>
+        </div>
       </div>
     </div>
   );
@@ -2372,6 +2431,7 @@ export function SettingsModal({
   usage,
   onClearOffline,
   onExportAll,
+  onShowGuide,
   me,
   onSignOut,
 }: {
@@ -2388,6 +2448,7 @@ export function SettingsModal({
   usage: { usedMB: number; quotaMB: number | null } | null;
   onClearOffline: () => void;
   onExportAll: () => void;
+  onShowGuide: () => void;
   me: AccountUser | null;
   onSignOut: () => void;
 }) {
@@ -2474,6 +2535,16 @@ export function SettingsModal({
               </div>
             </div>
           ) : null}
+          <div className="callout callout--tight">
+            <h4>Getting started</h4>
+            <p className="small">
+              The three-step guide (locate, draw or import, choose the crop) appears while you have no farms. If you
+              skipped it, open it again here.
+            </p>
+            <button type="button" className="button button--ghost button--small" onClick={onShowGuide}>
+              Show the getting-started guide
+            </button>
+          </div>
           <div className="callout callout--tight">
             <h4>App version</h4>
             <p className="small">

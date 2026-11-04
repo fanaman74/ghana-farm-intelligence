@@ -1,4 +1,4 @@
-﻿import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { api, ApiError, downloadExport, getAccessToken, pollJob, relativeAge, setAccessToken } from "./api";
 import type {
   AccountUser,
@@ -49,7 +49,7 @@ const DEFAULT_LAYERS: LayerState[] = [
     opacity: 0.85,
     kind: "vector",
     available: true,
-    description: "geoBoundaries ADM2 â€” 260 districts.",
+    description: "geoBoundaries ADM2 — 260 districts.",
   },
   {
     id: "roads",
@@ -125,7 +125,7 @@ const DEFAULT_LAYERS: LayerState[] = [
     opacity: 0.75,
     kind: "derived",
     available: true,
-    description: "Toggle to render this field's 250 m SoilGrids cells. Each cell is 250 m â€” blocky by design.",
+    description: "Toggle to render this field's 250 m SoilGrids cells. Each cell is 250 m — blocky by design.",
   },
   {
     id: "soil-carbon",
@@ -134,7 +134,7 @@ const DEFAULT_LAYERS: LayerState[] = [
     opacity: 0.75,
     kind: "derived",
     available: true,
-    description: "Toggle to render this field's 250 m SoilGrids cells (0â€“5 cm).",
+    description: "Toggle to render this field's 250 m SoilGrids cells (0–5 cm).",
   },
   {
     id: "soil-texture",
@@ -206,6 +206,9 @@ export default function App() {
   const [theme, setTheme] = useState<Theme>(() => readStored<Theme>("gfi.theme", "dark"));
   const [language, setLanguage] = useState<LanguageCode>(() => readStored<LanguageCode>("gfi.language", "en"));
   const [units, setUnits] = useState<"metric" | "imperial">(() => readStored<"metric" | "imperial">("gfi.units", "metric"));
+  // The getting-started card is an overlay over the map, so it needs a way out.
+  // Remembered across reloads and reversible from Settings → General.
+  const [guideDismissed, setGuideDismissed] = useState<boolean>(() => readStored<boolean>("gfi.onboarding.dismissed", false));
 
   const [farms, setFarms] = useState<Farm[]>([]);
   const [farmsSavedAt, setFarmsSavedAt] = useState<string | null>(null);
@@ -369,6 +372,19 @@ export default function App() {
     };
   }, []);
 
+  const showOnboarding = !booting && farms.length === 0 && !saveOpen && !guideDismissed;
+
+  const skipOnboarding = useCallback(() => {
+    setGuideDismissed(true);
+    store("gfi.onboarding.dismissed", true);
+  }, []);
+
+  const showOnboardingAgain = useCallback(() => {
+    setGuideDismissed(false);
+    store("gfi.onboarding.dismissed", false);
+    setSettingsOpen(false);
+  }, []);
+
   useEffect(() => {
     const handler = (event: KeyboardEvent) => {
       const target = event.target as HTMLElement | null;
@@ -378,6 +394,10 @@ export default function App() {
         setSearchOpen(true);
       }
       if (event.key === "Escape") {
+        // The guide sits above the map with nothing else open: Escape dismisses it.
+        if (showOnboarding && !settingsOpen && !searchOpen && mode === "idle") {
+          skipOnboarding();
+        }
         if (mode !== "idle" && !saveOpen) {
           setMode("idle");
           mapRef.current?.cancel();
@@ -393,7 +413,7 @@ export default function App() {
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [mode, farm, saveOpen]);
+  }, [mode, farm, saveOpen, showOnboarding, settingsOpen, searchOpen, skipOnboarding]);
 
   /* ---------------------------------------------------------------- selection */
   const refreshFarms = useCallback(async () => {
@@ -537,7 +557,7 @@ export default function App() {
           setAnalysis(payload);
           setAnalysisSavedAt(payload.generated_at);
           void offline.saveAnalysis(scope, payload);
-          notify("Analysis complete â€” every value shows its source and date.", "success");
+          notify("Analysis complete — every value shows its source and date.", "success");
         } else if (finished.status === "failed") {
           notify(finished.error ?? finished.message ?? "Analysis failed", "error");
         }
@@ -591,7 +611,7 @@ export default function App() {
       // loadGeometry keeps only the first ring, so editing a multi-part boundary
       // would silently delete every other part on save.
       notify(
-        "This boundary has several parts. Editing works on single-part boundaries â€” redraw it, or split it into fields instead.",
+        "This boundary has several parts. Editing works on single-part boundaries — redraw it, or split it into fields instead.",
         "error",
       );
       return;
@@ -670,7 +690,7 @@ export default function App() {
           });
           setPendingGeometry(geometry);
           setSaveError(
-            "No connection â€” this boundary has NOT been saved. Reconnect, then press â€œSave and analyseâ€. " +
+            "No connection — this boundary has NOT been saved. Reconnect, then press “Save and analyse”. " +
               "Closing this dialog discards it.",
           );
           setSaveOpen(true);
@@ -739,7 +759,7 @@ export default function App() {
       setFarm(refreshed.farm);
       await refreshFarms();
       endMode();
-      notify("Boundary updated â€” re-running the analysis.", "success");
+      notify("Boundary updated — re-running the analysis.", "success");
       void runAnalysis({ force: true, farmOverride: refreshed.farm });
     } catch (error) {
       notify(error instanceof Error ? error.message : "Could not update the boundary", "error");
@@ -774,7 +794,7 @@ export default function App() {
 
   const handleDelete = useCallback(async () => {
     if (!farm) return;
-    if (!window.confirm(`Delete â€œ${farm.name}â€ and all its records? This cannot be undone.`)) return;
+    if (!window.confirm(`Delete “${farm.name}” and all its records? This cannot be undone.`)) return;
     // Stop polling before the farm disappears, or the poll resurrects its panel.
     analysisAbort.current?.abort();
     analysisRun.current += 1;
@@ -822,7 +842,7 @@ export default function App() {
       const response = await api.createSample();
       await refreshFarms();
       await selectFarm(response.farm.id);
-      notify("Sample boundary created â€” it uses real sourced data.", "success");
+      notify("Sample boundary created — it uses real sourced data.", "success");
     } catch (error) {
       const message = error instanceof Error ? error.message : "Could not create the sample farm";
       setSampleError(message);
@@ -868,7 +888,7 @@ export default function App() {
       await api.addSoilTest(farm.id, payload);
       const refreshed = await api.getFarm(farm.id);
       setFarm(refreshed.farm);
-      notify("Soil test recorded â€” guidance now uses the measured value.", "success");
+      notify("Soil test recorded — guidance now uses the measured value.", "success");
       void runAnalysis({ force: true, farmOverride: refreshed.farm });
     },
     [farm, notify, runAnalysis],
@@ -984,10 +1004,8 @@ export default function App() {
   }, [farm?.id]);
 
   const toggleSatellite = useCallback(() => {
-    if (!farm) {
-      notify("Select a farm first, then open the satellite view.", "error");
-      return;
-    }
+    // A basemap needs no polygon: you switch to imagery to find the field you
+    // are about to draw, so this must work before any farm exists.
     if (!online) {
       notify("The satellite basemap needs a connection; the vector map still works offline.", "error");
       return;
@@ -999,7 +1017,16 @@ export default function App() {
         // mush, so show it at a regional scale where the mosaic is legible.
         const current = mapRef.current?.map()?.getZoom() ?? 14;
         if (current > 14.2) {
-          mapRef.current?.flyTo(farm.centroid_lat, farm.centroid_lon, 14.2);
+          const centre = farm
+            ? [farm.centroid_lat, farm.centroid_lon] as const
+            : null;
+          if (centre) {
+            mapRef.current?.flyTo(centre[0], centre[1], 14.2);
+          } else {
+            const map = mapRef.current?.map();
+            const here = map?.getCenter();
+            if (here) map?.jumpTo({ center: here, zoom: 14.2 });
+          }
         }
       }
       return next;
@@ -1083,7 +1110,6 @@ export default function App() {
   }, [notify]);
 
   const dataAge = analysis ? relativeAge(analysis.generated_at) : null;
-  const showOnboarding = !booting && farms.length === 0 && !saveOpen;
 
   const overlays: MapOverlay[] = useMemo(() => {
     const list: MapOverlay[] = [];
@@ -1177,7 +1203,7 @@ export default function App() {
             className="button button--primary"
             disabled={loginBusy || !loginName.trim() || !loginPassword}
           >
-            {loginBusy ? "Signing inâ€¦" : "Sign in"}
+            {loginBusy ? "Signing in…" : "Sign in"}
           </button>
           <p className="tiny muted">Accounts are created by an administrator. There is no self-signup.</p>
         </form>
@@ -1238,7 +1264,7 @@ export default function App() {
 
       <div className="workspace">
         {layersOpen ? (
-          <LayersPanel layers={layers} onChange={updateLayer} onClose={() => setLayersOpen(false)} analysis={analysis} />
+          <LayersPanel layers={layers} onChange={updateLayer} onClose={() => setLayersOpen(false)} analysis={analysis} hasFarm={Boolean(farm)} />
         ) : null}
 
         <main className="map-area">
@@ -1264,10 +1290,10 @@ export default function App() {
             {mode === "idle" ? (
               <>
                 <button type="button" className="map-tool" onClick={beginDraw} title="Draw farm (d)" aria-label="Draw farm boundary">
-                  âœŽ <span>Draw farm</span>
+                  ✎ <span>Draw farm</span>
                 </button>
                 <button type="button" className="map-tool" onClick={startGpsWalk} title="Record a GPS walk (g)" aria-label="Record a GPS boundary walk">
-                  â—Ž <span>GPS walk</span>
+                  ◎ <span>GPS walk</span>
                 </button>
                 <button
                   type="button"
@@ -1276,32 +1302,34 @@ export default function App() {
                   title="Import GeoJSON, KML or GPX"
                   aria-label="Import GeoJSON, KML or GPX"
                 >
-                  â‡ª <span>Import</span>
+                  ⇪ <span>Import</span>
                 </button>
                 {farm ? (
                   <>
                     <button type="button" className="map-tool" onClick={beginEdit} title="Edit vertices (e)" aria-label="Edit boundary vertices">
-                      âœ¥ <span>Edit</span>
+                      ✥ <span>Edit</span>
                     </button>
                     <button type="button" className="map-tool" onClick={beginSplit} title="Split into fields" aria-label="Split farm into fields">
-                      â§¸ <span>Split</span>
-                    </button>
-                    <button
-                      type="button"
-                      className={`map-tool map-tool--satellite ${satelliteOn ? "is-active" : ""}`}
-                      onClick={toggleSatellite}
-                      title="Satellite basemap â€” Sentinel-2 cloudless 2025 (EOX)"
-                      aria-label="Toggle satellite view"
-                      aria-pressed={satelliteOn}
-                    >
-                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" aria-hidden="true">
-                        <circle cx="12" cy="12" r="8" />
-                        <path d="M4 12h16M12 4a13 13 0 0 1 0 16M12 4a13 13 0 0 0 0 16" />
-                      </svg>{" "}
-                      <span>Satellite</span>
+                      ⧸ <span>Split</span>
                     </button>
                   </>
                 ) : null}
+                {/* Always available: imagery is what you need to *find* the field,
+                    so this must not wait for a farm to exist. */}
+                <button
+                  type="button"
+                  className={`map-tool map-tool--satellite ${satelliteOn ? "is-active" : ""}`}
+                  onClick={toggleSatellite}
+                  title="Basemap: Sentinel-2 satellite imagery ⇄ local vector map"
+                  aria-label="Toggle satellite basemap"
+                  aria-pressed={satelliteOn}
+                >
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" aria-hidden="true">
+                    <circle cx="12" cy="12" r="8" />
+                    <path d="M4 12h16M12 4a13 13 0 0 1 0 16M12 4a13 13 0 0 0 0 16" />
+                  </svg>{" "}
+                  <span>Satellite</span>
+                </button>
                 <button
                   type="button"
                   className={`map-tool ${terrain ? "is-active" : ""}`}
@@ -1322,7 +1350,7 @@ export default function App() {
             {mode === "draw" ? (
               <div className="draw-bar" role="status" aria-live="polite">
                 <span className="draw-bar__stat">
-                  <strong>{draft.stats?.vertices ?? 0}</strong> vertices Â·{" "}
+                  <strong>{draft.stats?.vertices ?? 0}</strong> vertices ·{" "}
                   {draft.stats?.areaHa ? `${draft.stats.areaHa.toFixed(2)} ha` : "no area yet"}
                 </span>
                 <button type="button" className="button button--ghost button--small" onClick={() => mapRef.current?.undo()}>
@@ -1367,8 +1395,8 @@ export default function App() {
             {mode === "gps" ? (
               <div className="draw-bar" role="status" aria-live="polite">
                 <span className="draw-bar__stat">
-                  GPS walk Â· {gps.points} points{gps.accuracy ? ` Â· Â±${Math.round(gps.accuracy)} m` : ""}
-                  {gps.error ? ` Â· ${gps.error}` : ""}
+                  GPS walk · {gps.points} points{gps.accuracy ? ` · ±${Math.round(gps.accuracy)} m` : ""}
+                  {gps.error ? ` · ${gps.error}` : ""}
                 </span>
                 <button
                   type="button"
@@ -1398,14 +1426,14 @@ export default function App() {
             <div className="map-notice" role="status">
               {mapNotice}
               <button type="button" className="icon-button" onClick={() => setMapNotice(null)} aria-label="Dismiss map message">
-                âœ•
+                ✕
               </button>
             </div>
           ) : null}
 
           {satelliteOn ? (
             <div className="map-satellite-note" role="status">
-              <strong>Satellite basemap</strong> Sentinel-2 cloudless 2025 Â· 10 m Â· Â© EOX (CC BY-SA 4.0)
+              <strong>Satellite basemap</strong> Sentinel-2 cloudless 2025 · 10 m · © EOX (CC BY-SA 4.0)
             </div>
           ) : null}
 
@@ -1419,7 +1447,7 @@ export default function App() {
 
           {!online ? (
             <div className="offline-banner" role="status">
-              Offline â€” showing saved data{farmsSavedAt ? ` from ${relativeAge(farmsSavedAt)}` : ""}. Live updates need
+              Offline — showing saved data{farmsSavedAt ? ` from ${relativeAge(farmsSavedAt)}` : ""}. Live updates need
               connectivity.
             </div>
           ) : null}
@@ -1465,6 +1493,7 @@ export default function App() {
           onGps={startGpsWalk}
           onSample={() => void createSample()}
           onSettings={openSettings}
+          onSkip={skipOnboarding}
           busy={catalogBusy}
           error={sampleError}
         />
@@ -1475,7 +1504,7 @@ export default function App() {
         onClose={() => setSearchOpen(false)}
         onSelect={(result) => {
           mapRef.current?.flyTo(result.lat, result.lon, result.kind === "region" ? 8 : 13);
-          setMapNotice(`${result.name}${result.district ? ` Â· ${result.district}` : ""}${result.region ? ` Â· ${result.region}` : ""}`);
+          setMapNotice(`${result.name}${result.district ? ` · ${result.district}` : ""}${result.region ? ` · ${result.region}` : ""}`);
           if (window.innerWidth <= 980) setPanelOpen(false);
         }}
         onDrawHere={() => {
@@ -1501,6 +1530,7 @@ export default function App() {
         usage={usage}
         onClearOffline={() => void clearOffline()}
         onExportAll={handleExportAll}
+        onShowGuide={showOnboardingAgain}
         me={authUser}
         onSignOut={() => void signOut()}
       />
@@ -1538,7 +1568,7 @@ export default function App() {
       {catalogBusy ? (
         <div className="busy-veil" role="status" aria-live="polite">
           <span className="spinner" aria-hidden="true" />
-          Workingâ€¦
+          Working…
         </div>
       ) : null}
     </div>

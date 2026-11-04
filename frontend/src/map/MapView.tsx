@@ -357,11 +357,13 @@ export const MapView = forwardRef<MapApi, Props>(function MapView(props, ref) {
       style: buildStyle(theme),
       center: GHANA_CENTER,
       zoom: 6.4,
-      minZoom: 4.8,
+      minZoom: 3,
       maxZoom: 19,
+      // A loose regional box: the old Ghana-only clamp stopped zoom-out and
+      // panning at a hard edge while you were trying to find your field.
       maxBounds: [
-        [-5.2, 2.6],
-        [2.6, 12.6],
+        [-20, -12],
+        [18, 26],
       ],
       attributionControl: false,
       dragRotate: false,
