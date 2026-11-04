@@ -10,8 +10,13 @@ RUN npm run build
 
 # ---- 2. Python runtime ------------------------------------------------------
 # rasterio / shapely / pyproj ship manylinux wheels that bundle GDAL and PROJ,
-# so no system GDAL installation is required.
-FROM python:3.12-slim AS runtime
+# so no system GDAL installation is required - but the wheel's GDAL still links
+# against the *system* libexpat, which python:3.12-slim does not install (CPython
+# uses its own bundled copy). Without libexpat1 the container dies at import
+# rasterio: "ImportError: libexpat.so.1: cannot open shared object file".
+# The base is pinned to a Debian release: the bare -slim tag moved between
+# bookworm and trixie and silently changed this dependency set.
+FROM python:3.12-slim-bookworm AS runtime
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
@@ -23,7 +28,7 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 WORKDIR /app
 
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends curl ca-certificates gosu \
+    && apt-get install -y --no-install-recommends curl ca-certificates gosu libexpat1 \
     && rm -rf /var/lib/apt/lists/*
 
 # Unprivileged runtime user. The entrypoint fixes ownership of the mounted volume
@@ -36,6 +41,11 @@ RUN groupadd --gid 10001 gfi \
 # Regenerate backend/requirements.lock from backend/requirements.txt when updating.
 COPY backend/requirements.txt backend/requirements.lock ./
 RUN pip install --no-cache-dir -r requirements.lock
+
+# Fail the build, not the running container, when a wheel's native library is
+# missing from the base image. This is the check that would have caught the
+# libexpat1 crash-loop above before it reached a deployment.
+RUN python -c "import rasterio, shapely, pyproj, numpy, PIL, reportlab; print('native libraries ok')"
 
 COPY backend/ ./
 COPY --from=web /web/dist ./static
