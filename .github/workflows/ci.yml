@@ -116,12 +116,13 @@ jobs:
           curl -fsS http://127.0.0.1:8000/ | grep -q 'id="root"' || { report "PWA shell missing"; exit 1; }
 
           # PID 1 must not be root: the entrypoint drops to uid 10001 with gosu.
-          # Print the whole table first, so a parsing miss is visible.
-          docker top gfi -o pid,user || true
-          pid1_user=$(docker top gfi -o pid,user | awk '$1 == 1 {print $2}')
-          echo "pid 1 user: ${pid1_user:-unknown}"
-          test -n "$pid1_user" || { report "could not read PID 1 user"; exit 1; }
-          test "$pid1_user" != "root" || { report "PID 1 is root"; exit 1; }
+          # Ask docker for the numeric uid rather than mapping a name, and print
+          # the table so a formatting surprise is visible in the log.
+          docker top gfi -o pid,uid || true
+          pid1_uid=$(docker top gfi -o pid,uid | awk '$1 == 1 {print $2}')
+          echo "pid 1 uid: ${pid1_uid:-unknown}"
+          test -n "$pid1_uid" || { report "could not read PID 1 uid"; exit 1; }
+          test "$pid1_uid" != "0" || { report "PID 1 is root"; exit 1; }
 
       # A second container, because the gate must be exercised with a token set.
       - name: Access token gates the private API
