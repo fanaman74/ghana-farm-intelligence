@@ -40,6 +40,13 @@ async function waitForAnalysis(page: Page, timeout = 300_000) {
 async function openLayers(page: Page) {
   if (await page.locator(".layer").first().isVisible().catch(() => false)) return;
   await page.getByRole("button", { name: /Toggle layers panel/i }).click();
+  // Imagery and evidence groups stay folded until a farm is selected, so a test
+  // that inspects a layer row has to open the group first.
+  if (!(await page.locator(".layer").first().isVisible().catch(() => false))) {
+    for (const toggle of await page.locator('.layer-group__toggle[aria-expanded="false"]').all()) {
+      await toggle.click();
+    }
+  }
   await expect(page.locator(".layer").first()).toBeVisible({ timeout: 15_000 });
 }
 
@@ -220,7 +227,7 @@ test.describe("Ghana Farm Intelligence", () => {
     await ensureFarmSelected(page);
     await waitForAnalysis(page, 180_000);
 
-    const button = page.getByLabel("Toggle satellite view");
+    const button = page.getByLabel("Toggle satellite basemap");
     const tilePromise = page.waitForResponse(
       (response) => response.url().includes("tiles.maps.eox.at") && response.status() === 200,
       { timeout: 45_000 },
