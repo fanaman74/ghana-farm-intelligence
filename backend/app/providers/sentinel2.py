@@ -289,7 +289,25 @@ def analyse(geom, *, months: int = 12, max_candidates: int = 8) -> Section:
         raise ProviderError(PROVIDER, "no_readable_scene", "Sentinel-2 scenes were found but none could be read")
     evaluated.sort(key=lambda item: item["datetime"] or "", reverse=True)
     usable = [item for item in evaluated if item["cloud_free_fraction"] >= 0.30]
-    latest = usable[0] if usable else evaluated[0]
+    newest = usable[0] if usable else evaluated[0]
+    # Newest is not automatically most useful: a scene that is 34 % cloud-free
+    # over the field paints two-thirds of it transparent. Among recent candidates,
+    # take a clearly clearer scene, and say so when that is what happened.
+    newest_date = date.fromisoformat(newest["date"])
+    recent_clear = [
+        item
+        for item in usable
+        if date.fromisoformat(item["date"]) >= newest_date - timedelta(days=60)
+    ]
+    clearest = max(
+        recent_clear,
+        key=lambda item: (item["cloud_free_fraction"], item["datetime"] or ""),
+        default=None,
+    )
+    if clearest is not None and clearest["cloud_free_fraction"] >= newest["cloud_free_fraction"] + 0.15:
+        latest = clearest
+    else:
+        latest = newest
 
     trend_candidates: list[dict[str, Any]] = [latest]
     for item in evaluated:
@@ -304,6 +322,13 @@ def analyse(geom, *, months: int = 12, max_candidates: int = 8) -> Section:
             break
 
     warnings: list[str] = []
+    if latest["id"] != evaluated[0]["id"]:
+        newest_scene = evaluated[0]
+        warnings.append(
+            f"The newest image ({newest_scene['date']}, "
+            f"{newest_scene['cloud_free_fraction'] * 100:.0f}% cloud-free over this field) was cloudier than the "
+            f"{latest['date']} scene ({latest['cloud_free_fraction'] * 100:.0f}%), which the values and overlays use."
+        )
     results: list[dict[str, Any]] = []
     for item in trend_candidates:
         try:
