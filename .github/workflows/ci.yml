@@ -16,9 +16,6 @@ jobs:
   backend:
     name: Backend (Python 3.12)
     runs-on: ubuntu-latest
-    env:
-      # Tests write SQLite/cache here, never into the checkout.
-      GFI_DATA_DIR: ${{ runner.temp }}/gfi-data
     steps:
       - uses: actions/checkout@v4
 
@@ -31,12 +28,18 @@ jobs:
       - name: Install dependencies
         run: pip install -r backend/requirements-dev.txt
 
+      # The runner context is not allowed in a job-level env: declaring
+      # ${{ runner.temp }} at jobs.backend.env made the whole workflow invalid
+      # ("Unrecognized named-value: 'runner'"), so no CI job ever started.
       - name: Unit and API tests (network provider tests self-skip)
+        env:
+          GFI_DATA_DIR: ${{ runner.temp }}/gfi-data
         run: python -m pytest backend/tests -q
 
       - name: Verify the app imports with production settings
         env:
           GFI_ENV: production
+          GFI_DATA_DIR: ${{ runner.temp }}/gfi-data
         run: python -c "import app.main; print('import ok')"
         working-directory: backend
 
