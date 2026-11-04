@@ -86,25 +86,42 @@ jobs:
       - name: Start and smoke-test
         run: |
           set -euo pipefail
+          # Surface the container's own log in an annotation, so a failed smoke
+          # test says why instead of just "exit code 1". Annotations are readable
+          # from the API without a token; job logs are not.
+          report() {
+            echo "::error title=$1::$1 — $(docker logs gfi 2>&1 | tail -6 | tr '\n' ' ' | tr -s ' ' | cut -c1-800)"
+            docker logs gfi || true
+          }
           docker run -d --name gfi -p 8000:8000 -e GFI_ENV=production gfi:ci
 
+          ready=""
           for i in $(seq 1 45); do
-            if curl -fsS http://127.0.0.1:8000/api/health -o health.json 2>/dev/null; then break; fi
+            if ! docker inspect -f '{{.State.Running}}' gfi 2>/dev/null | grep -q true; then
+              report "container exited before becoming healthy"
+              exit 1
+            fi
+            if curl -fsS http://127.0.0.1:8000/api/health -o health.json 2>/dev/null; then ready=1; break; fi
             sleep 2
           done
+          if [ -z "$ready" ]; then
+            report "no healthy response within 90s"
+            exit 1
+          fi
           cat health.json
-          python3 -c "import json; d=json.load(open('health.json')); assert d['status']=='ok', d"
-          python3 -c "import json; d=json.load(open('health.json')); assert d['auth']['farm_data']=='open', d"
+          python3 -c "import json; d=json.load(open('health.json')); assert d['status']=='ok', d" || { report "health status not ok"; exit 1; }
+          python3 -c "import json; d=json.load(open('health.json')); assert d['auth']['farm_data']=='open', d" || { report "auth posture not open"; exit 1; }
 
-          test "$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:8000/api/farms)" = "200"
-          curl -fsS http://127.0.0.1:8000/ | grep -q 'id="root"'
+          test "$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:8000/api/farms)" = "200" || { report "farms endpoint not 200"; exit 1; }
+          curl -fsS http://127.0.0.1:8000/ | grep -q 'id="root"' || { report "PWA shell missing"; exit 1; }
 
-          # PID 1 must not be root. Checking only pid 1 avoids racing the
-          # healthcheck, which runs as root by design.
-          pid1_user=$(docker top gfi -o user,pid | awk '$2 == 1 {print $1}')
+          # PID 1 must not be root: the entrypoint drops to uid 10001 with gosu.
+          # Print the whole table first, so a parsing miss is visible.
+          docker top gfi -o pid,user || true
+          pid1_user=$(docker top gfi -o pid,user | awk '$1 == 1 {print $2}')
           echo "pid 1 user: ${pid1_user:-unknown}"
-          test -n "$pid1_user"
-          test "$pid1_user" != "root"
+          test -n "$pid1_user" || { report "could not read PID 1 user"; exit 1; }
+          test "$pid1_user" != "root" || { report "PID 1 is root"; exit 1; }
 
       # A second container, because the gate must be exercised with a token set.
       - name: Access token gates the private API
